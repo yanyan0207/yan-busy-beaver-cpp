@@ -1,0 +1,62 @@
+[project]
+name = "busy-beaver-c"
+version = "0.1.0"
+description = "Busy Beaver problem implementation in C++23 with Python scripts"
+readme = "README_ja.md"
+requires-python = ">=3.14"
+dependencies = []
+
+[tool.uv]
+exclude-newer = "2 weeks"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13.0,<2",
+    "pre-commit>=4.6.1",
+    "pylint>=3.3.4,<4",
+    "ruff>=0,<1",
+]
+
+[tool.ruff]
+include = ["*.py", "*.pyi"]
+indent-width = 4
+line-length = 88
+preview = true
+target-version = "py313"
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint]
+extend-safe-fixes = ["ALL"]
+fixable = ["ALL"]
+ignore = ["E501"]
+select = [
+    "E2",
+    "E4",
+    "E5",
+    "E7",
+    "E9",
+    "F",
+    "I",
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+strict_optional = true
+implicit_optional = true
+explicit_package_bases = true
+
+[tool.pylint.main]
+py-version = "3.14"
+
+[tool.pylint.messages_control]
+disable = [
+    "C0114",  # missing-module-docstring
+    "C0115",  # missing-class-docstring
+    "C0116",  # missing-function-docstring
+]
