@@ -4,7 +4,7 @@
         {
             "label": "cmake: configure",
             "type": "shell",
-            "command": "cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_CXX_COMPILER=clang++",
+            "command": "cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release",
             "group": "build",
             "presentation": { "panel": "shared" }
         },

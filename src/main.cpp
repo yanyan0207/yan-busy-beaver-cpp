@@ -9,7 +9,7 @@
 // 各トークンは <write><dir><next> の3文字
 // 状態: A=0, B=1, C=2, ... H=halt(-1)
 // 例: BB(2) -> "1RB 1LB 1LA 1RH"
-BbMachine parse(const std::string& notation) {
+void parse(const std::string& notation, BbMachine** m) {
     std::vector<std::string> tokens;
     size_t i = 0;
     while (i < notation.size()) {
@@ -27,7 +27,7 @@ BbMachine parse(const std::string& notation) {
         throw std::runtime_error("invalid notation");
     const int num_states = static_cast<int>(tokens.size() / 2);
 
-    BbMachine m(num_states, 1'000'000);  // max_stepsは適当に大きく設定
+    *m = new BbMachine(num_states, 1'000'000);
 
     for (int state = 0; state < num_states; ++state) {
         for (int read = 0; read < 2; ++read) {
@@ -35,10 +35,9 @@ BbMachine parse(const std::string& notation) {
             const int write = tok[0] - '0';
             const auto dir = (tok[1] == 'R') ? BbMachine::Dir::R : BbMachine::Dir::L;
             const int next = (tok[2] == 'H') ? -1 : (tok[2] - 'A');
-            m.set_instruction(state, read, write, dir, next);
+            (*m)->set_instruction(state, read, write, dir, next);
         }
     }
-    return m;
 }
 
 int main(int argc, char* argv[]) {
@@ -48,12 +47,15 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    BbMachine m = parse(argv[1]);
-    const auto result = m.run();
+    BbMachine* m = nullptr;
+    parse(argv[1], &m);
+    const auto result = m->run();
 
     if (result == BbMachine::Result::HALT) {
-        std::println("halted: {} steps", m.count());
+        std::println("halted: {} steps", m->count());
     } else {
-        std::println("max steps exceeded: {} steps", m.count());
+        std::println("max steps exceeded: {} steps", m->count());
     }
+
+    delete m;
 }

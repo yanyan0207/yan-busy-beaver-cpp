@@ -19,6 +19,8 @@ public:
         std::fill(data_, data_ + size_, 0);
     }
     ~Tape() { delete[] data_; }
+    Tape(const Tape&) = delete;
+    Tape& operator=(const Tape&) = delete;
     void write_and_move(char value, int dir) {
         data_[head_ + offset_] = value;
         head_ += dir;
@@ -61,6 +63,8 @@ public:
     enum class Result { HALT, MAX_STEPS_EXCEEDED };
 
     BbMachine() = default;
+    BbMachine(const BbMachine&) = delete;
+    BbMachine& operator=(const BbMachine&) = delete;
     explicit BbMachine(int num_states, size_t max_steps)
         : num_states_(num_states), max_steps_(max_steps), table_(num_states), tape_(max_steps) {}
 
