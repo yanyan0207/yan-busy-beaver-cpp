@@ -9,7 +9,8 @@ if(CLANG_TIDY_EXE)
     set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--config-file=${CMAKE_SOURCE_DIR}/.clang-tidy")
 endif()
 
-add_executable(bb src/main.cpp)
+add_executable(bb src/main.cpp src/bb_machine.cpp)
+add_executable(bb_search src/bb_search.cpp src/bb_machine.cpp)
 
 enable_testing()
 

@@ -17,6 +17,15 @@
             "presentation": { "panel": "shared" }
         },
         {
+            "label": "run: bb_search",
+            "type": "shell",
+            "command": "./build/bb_search.exe 2",
+            "dependsOn": "cmake: build",
+            "presentation": {
+                "panel": "shared"
+            }
+        },
+        {
             "label": "run: bb",
             "type": "shell",
             "command": "./build/bb",
