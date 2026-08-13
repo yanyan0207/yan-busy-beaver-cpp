@@ -42,6 +42,24 @@
             "type": "shell",
             "command": "uv run pre-commit run --all-files",
             "presentation": { "panel": "shared" }
+        },
+        {
+            "label": "pre-commit: clang-format",
+            "type": "shell",
+            "command": "uv run pre-commit run clang-format --all-files",
+            "presentation": { "panel": "shared" }
+        },
+        {
+            "label": "pre-commit: clang-tidy",
+            "type": "shell",
+            "command": "uv run pre-commit run clang-tidy --all-files",
+            "presentation": { "panel": "shared" }
+        },
+        {
+            "label": "pre-commit: ruff",
+            "type": "shell",
+            "command": "uv run pre-commit run ruff --all-files && uv run pre-commit run ruff-format --all-files",
+            "presentation": { "panel": "shared" }
         }
     ]
 }
