@@ -1,0 +1,47 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "cmake: configure",
+            "type": "shell",
+            "command": "cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_CXX_COMPILER=clang++",
+            "group": "build",
+            "presentation": { "panel": "shared" }
+        },
+        {
+            "label": "cmake: build",
+            "type": "shell",
+            "command": "cmake --build build --config Release",
+            "group": { "kind": "build", "isDefault": true },
+            "dependsOn": "cmake: configure",
+            "presentation": { "panel": "shared" }
+        },
+        {
+            "label": "run: bb",
+            "type": "shell",
+            "command": "./build/bb",
+            "dependsOn": "cmake: build",
+            "presentation": { "panel": "shared" }
+        },
+        {
+            "label": "test: ctest",
+            "type": "shell",
+            "command": "ctest --test-dir build --output-on-failure",
+            "group": { "kind": "test", "isDefault": true },
+            "dependsOn": "cmake: build",
+            "presentation": { "panel": "shared" }
+        },
+        {
+            "label": "uv: sync",
+            "type": "shell",
+            "command": "uv sync",
+            "presentation": { "panel": "shared" }
+        },
+        {
+            "label": "pre-commit: run all",
+            "type": "shell",
+            "command": "uv run pre-commit run --all-files",
+            "presentation": { "panel": "shared" }
+        }
+    ]
+}
