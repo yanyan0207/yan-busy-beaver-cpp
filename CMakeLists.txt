@@ -20,9 +20,15 @@ if(CLANG_TIDY_EXE)
     set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--config-file=${CMAKE_SOURCE_DIR}/.clang-tidy;--header-filter=${CMAKE_SOURCE_DIR}/src/.*")
 endif()
 
+option(BB_STAT "Enable per-phase timing statistics" ON)
+
 add_executable(bb src/main.cpp src/bb_machine.cpp)
 add_executable(bb_search src/bb_search.cpp src/bb_machine.cpp)
 target_link_libraries(bb_search PRIVATE argparse)
+
+if(BB_STAT)
+    target_compile_definitions(bb_search PRIVATE BB_STAT)
+endif()
 
 enable_testing()
 add_subdirectory(tests)

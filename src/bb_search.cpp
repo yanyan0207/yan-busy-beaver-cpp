@@ -11,6 +11,7 @@
 
 #include "bb_assert.hpp"
 #include "bb_machine.hpp"
+#include "bb_stat.hpp"
 
 using Config = std::unordered_map<std::string, std::string>;
 
@@ -45,11 +46,23 @@ void save_csv(int n_states, const Config& config, double elapsed_sec) {
     const std::string max_steps = config.at("max_steps");
     const std::string ASSERT_ENABLED_str = ASSERT_ENABLED ? "true" : "false";
     const std::string key = std::format("{},{},{}", version, max_steps, ASSERT_ENABLED_str);
-    const std::string new_row =
-        std::format("{},{},{},{:.3f}", version, max_steps, ASSERT_ENABLED_str, elapsed_sec);
 
+    const auto get = [&](const std::string& k) {
+        auto it = config.find(k);
+        return it != config.end() ? it->second : std::string("0");
+    };
+    const std::string new_row = std::format(
+        "{},{},{},{:.3f},{},{},{},{},{},{}", version, max_steps, ASSERT_ENABLED_str, elapsed_sec,
+        get("stat_setup_count"), get("stat_setup_total_sec"), get("stat_run_count"),
+        get("stat_run_total_sec"), get("stat_dfs_count"), get("stat_dfs_total_sec"));
+
+    const std::string header =
+        "git_version,max_steps,ASSERT_ENABLED,elapsed_seconds,"
+        "setup_count,setup_total_sec,run_count,run_total_sec,dfs_count,dfs_total_sec";
     if (lines.empty())
-        lines.emplace_back("git_version,max_steps,ASSERT_ENABLED,elapsed_seconds");
+        lines.emplace_back(header);
+    else if (lines[0] != header)
+        lines[0] = header;
 
     for (auto& l : lines) {
         if (l.starts_with(key)) {
@@ -282,8 +295,12 @@ void search(const Config& config) {
     if (output_csv) {
         std::filesystem::create_directories("results");
         csv_file.open(std::format("results/bb_{}_patterns.csv", n_states));
-        csv_file << "pattern,steps\n";
+        csv_file << "pattern,steps,setup_usec,run_usec\n";
     }
+
+    Stat stat_setup;
+    Stat stat_run;
+    Stat stat_dfs;
 
     const auto t_start = std::chrono::steady_clock::now();
 
@@ -298,15 +315,21 @@ void search(const Config& config) {
             std::println("transitions: {}", table_to_notation(enumerator.get_instructions()));
         }
 
+        stat_setup.start();
         BbMachine m(n_states, max_steps);
         for (int state = 0; state < n_states; ++state)
             for (int symbol = 0; symbol < 2; ++symbol) {
                 const auto& instr = enumerator.get_instruction(state, static_cast<Symbol>(symbol));
                 m.set_instruction(state, static_cast<Symbol>(symbol), instr);
             }
+        stat_setup.stop();
 
         ++candidates_tried;
+
+        stat_run.start();
         const auto& last_transition = m.run();
+        stat_run.stop();
+
 #ifdef DEBUG_PRINT
         std::println("result: {} steps, last transition: {}{}{}", m.count(),
                      static_cast<int>(last_transition.instr.write),
@@ -317,14 +340,19 @@ void search(const Config& config) {
 #endif
         if (last_transition.instr.is_halt() == false) {
             ++timeout_count;
+            stat_dfs.start();
             bool has_next = enumerator.next();
-            if (!has_next) {
+            stat_dfs.stop();
+            if (!has_next)
                 break;
-            }
         } else {
             const std::string notation = table_to_notation(m.get_instructions());
-            if (output_csv)
-                csv_file << notation << ',' << m.count() << '\n';
+            if (output_csv) {
+                csv_file << notation << ',' << m.count() << ','
+                         << std::format("{:.3f},{:.3f}", stat_setup.last_ms() * 1000.0,
+                                        stat_run.last_ms() * 1000.0)
+                         << '\n';
+            }
             if (m.count() > best_steps) {
                 best_steps = m.count();
                 max_patterns.clear();
@@ -332,10 +360,11 @@ void search(const Config& config) {
             } else if (m.count() == best_steps) {
                 max_patterns.push_back(notation);
             }
+            stat_dfs.start();
             bool has_next = enumerator.push_or_next(last_transition.state, last_transition.value);
-            if (!has_next) {
+            stat_dfs.stop();
+            if (!has_next)
                 break;
-            }
         }
     }
 
@@ -344,6 +373,11 @@ void search(const Config& config) {
 
     std::println("最大: {} steps", best_steps);
     std::println("経過時間: {:.3f} 秒", elapsed);
+#ifdef BB_STAT
+    std::println("{}", stat_setup.format("stat_setup"));
+    std::println("{}", stat_run.format("stat_run"));
+    std::println("{}", stat_dfs.format("stat_dfs"));
+#endif
 
     const std::string version = git_version();
     save_log(n_states, max_steps, best_steps, candidates_tried, timeout_count, max_patterns,
@@ -352,6 +386,14 @@ void search(const Config& config) {
     if (save_time) {
         Config c = config;
         c["git_version"] = version;
+#ifdef BB_STAT
+        c["stat_setup_count"] = std::to_string(stat_setup.count);
+        c["stat_setup_total_sec"] = std::format("{:.6f}", stat_setup.total_ms / 1000.0);
+        c["stat_run_count"] = std::to_string(stat_run.count);
+        c["stat_run_total_sec"] = std::format("{:.6f}", stat_run.total_ms / 1000.0);
+        c["stat_dfs_count"] = std::to_string(stat_dfs.count);
+        c["stat_dfs_total_sec"] = std::format("{:.6f}", stat_dfs.total_ms / 1000.0);
+#endif
         save_csv(n_states, c, elapsed);
     }
 }
