@@ -41,6 +41,21 @@
             "presentation": { "panel": "shared" }
         },
         {
+            "label": "cmake: configure (assert)",
+            "type": "shell",
+            "command": "cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release '-DCMAKE_CXX_FLAGS_RELEASE=-O3'",
+            "group": "build",
+            "presentation": { "panel": "shared" }
+        },
+        {
+            "label": "cmake: build (assert)",
+            "type": "shell",
+            "command": "cmake --build build --config Release",
+            "group": "build",
+            "dependsOn": "cmake: configure (assert)",
+            "presentation": { "panel": "shared" }
+        },
+        {
             "label": "uv: sync",
             "type": "shell",
             "command": "uv sync",

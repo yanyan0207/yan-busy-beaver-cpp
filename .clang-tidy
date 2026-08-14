@@ -7,7 +7,7 @@ Checks: >
   -performance-enum-size,
 
 WarningsAsErrors: ""
-HeaderFilterRegex: ".*"
+HeaderFilterRegex: ".*/src/.*"
 
 CheckOptions:
   - key: readability-identifier-naming.VariableCase

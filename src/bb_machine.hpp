@@ -1,10 +1,12 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <vector>
 
 using State = int;
-using Symbol = int;
+enum class Symbol { ZERO = 0, ONE = 1 };
+enum class Dir { L = -1, R = 1 };
 
 class Tape {
     char* data_;
@@ -21,17 +23,25 @@ public:
     ~Tape() { delete[] data_; }
     Tape(const Tape&) = delete;
     Tape& operator=(const Tape&) = delete;
-    void write_and_move(char value, int dir) {
-        data_[head_ + offset_] = value;
-        head_ += dir;
+    void write_and_move(Symbol value, Dir dir) {
+        data_[head_ + offset_] = static_cast<char>(value);
+        head_ += static_cast<int>(dir);
     }
-    [[nodiscard]] char read() const { return data_[head_ + offset_]; }
+    [[nodiscard]] Symbol read() const { return static_cast<Symbol>(data_[head_ + offset_]); }
 };
 
 struct Instruction {
     Symbol write;
-    int dir;
+    Dir dir;
     State next;
+
+    [[nodiscard]] bool is_halt() const { return next == -1; }
+};
+
+struct Transition {
+    State state;
+    Symbol value;
+    Instruction instr;
 };
 
 class TransitionTable {
@@ -39,41 +49,46 @@ public:
     TransitionTable(int num_states) {
         for (int i = 0; i < num_states; ++i) {
             for (int j = 0; j < 2; ++j) {
-                table_.push_back({.write = 0, .dir = 0, .next = -1});
+                table_.push_back({.write = Symbol::ZERO, .dir = Dir::R, .next = -1});
             }
         }
     }
 
-    void set_instruction(State state, Symbol read, Symbol write, int dir, State next) {
-        table_[key(state, read)] = {.write = write, .dir = dir, .next = next};
+    void set_instruction(State state, Symbol read, const Instruction& instr) {
+        table_[key(state, read)] = instr;
     }
 
     [[nodiscard]] const Instruction& get_instruction(State state, Symbol read) const {
         return table_[key(state, read)];
     }
 
+    [[nodiscard]] const std::vector<Instruction>& get_instructions() const { return table_; }
+
 private:
-    [[nodiscard]] size_t key(State state, Symbol read) const { return state * 2 + read; }
+    [[nodiscard]] size_t key(State state, Symbol read) const {
+        return state * 2 + static_cast<int>(read);
+    }
     std::vector<Instruction> table_;
 };
 
 class BbMachine {
 public:
-    enum class Dir { L = -1, R = 1 };
-    enum class Result { HALT, MAX_STEPS_EXCEEDED };
-
     BbMachine() = default;
     BbMachine(const BbMachine&) = delete;
     BbMachine& operator=(const BbMachine&) = delete;
     explicit BbMachine(int num_states, size_t max_steps)
         : num_states_(num_states), max_steps_(max_steps), table_(num_states), tape_(max_steps) {}
 
-    void set_instruction(State state, Symbol read, Symbol write, Dir dir, State next) {
-        table_.set_instruction(state, read, write, static_cast<int>(dir), next);
+    void set_instruction(State state, Symbol read, const Instruction& instr) {
+        table_.set_instruction(state, read, instr);
     }
 
-    Result run();
+    [[nodiscard]] const std::vector<Instruction>& get_instructions() const {
+        return table_.get_instructions();
+    }
     [[nodiscard]] uint64_t count() const { return count_; }
+
+    Transition run();
 
 private:
     int num_states_ = 0;

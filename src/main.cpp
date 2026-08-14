@@ -33,9 +33,10 @@ void parse(const std::string& notation, BbMachine** m) {
         for (int read = 0; read < 2; ++read) {
             const auto& tok = tokens[state * 2 + read];
             const int write = tok[0] - '0';
-            const auto dir = (tok[1] == 'R') ? BbMachine::Dir::R : BbMachine::Dir::L;
+            const auto dir = (tok[1] == 'R') ? Dir::R : Dir::L;
             const int next = (tok[2] == 'H') ? -1 : (tok[2] - 'A');
-            (*m)->set_instruction(state, read, write, dir, next);
+            (*m)->set_instruction(state, static_cast<Symbol>(read),
+                                  {.write = static_cast<Symbol>(write), .dir = dir, .next = next});
         }
     }
 }
@@ -51,7 +52,7 @@ int main(int argc, char* argv[]) {
     parse(argv[1], &m);
     const auto result = m->run();
 
-    if (result == BbMachine::Result::HALT) {
+    if (result.instr.is_halt()) {
         std::println("halted: {} steps", m->count());
     } else {
         std::println("max steps exceeded: {} steps", m->count());
