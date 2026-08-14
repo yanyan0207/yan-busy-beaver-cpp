@@ -1,2 +1,20 @@
+# Build
 build/
 build-*/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+
+# Generated test data
+tests/data/
+
+# Generated result files
+results/*_patterns.csv
+results/*_assert.log
+
+# pre-commit
+.pre-commit-cache/

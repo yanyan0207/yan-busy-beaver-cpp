@@ -267,7 +267,9 @@ private:
 void search(const Config& config) {
     const int n_states = std::stoi(config.at("n_states"));
     const size_t max_steps = std::stoull(config.at("max_steps"));
+    const size_t max_candidates = std::stoull(config.at("max_candidates"));
     const bool save_time = config.count("save_time") > 0;
+    const bool output_csv = config.count("output_csv") > 0;
 
     const Instruction halt = {.write = Symbol::ZERO, .dir = Dir::R, .next = -1};
 
@@ -276,11 +278,18 @@ void search(const Config& config) {
     size_t candidates_tried = 0;
     size_t timeout_count = 0;
 
+    std::ofstream csv_file;
+    if (output_csv) {
+        std::filesystem::create_directories("results");
+        csv_file.open(std::format("results/bb_{}_patterns.csv", n_states));
+        csv_file << "pattern,steps\n";
+    }
+
     const auto t_start = std::chrono::steady_clock::now();
 
     MachineEnumerator enumerator(n_states);
 
-    for (int i = 0;; ++i) {
+    for (int i = 0; max_candidates == 0 || candidates_tried < max_candidates; ++i) {
         if (i % 1000000 == 0) {
             std::println("enumerating... {}", i);
             const double elapsed =
@@ -313,12 +322,15 @@ void search(const Config& config) {
                 break;
             }
         } else {
+            const std::string notation = table_to_notation(m.get_instructions());
+            if (output_csv)
+                csv_file << notation << ',' << m.count() << '\n';
             if (m.count() > best_steps) {
                 best_steps = m.count();
                 max_patterns.clear();
-                max_patterns.push_back(table_to_notation(m.get_instructions()));
+                max_patterns.push_back(notation);
             } else if (m.count() == best_steps) {
-                max_patterns.push_back(table_to_notation(m.get_instructions()));
+                max_patterns.push_back(notation);
             }
             bool has_next = enumerator.push_or_next(last_transition.state, last_transition.value);
             if (!has_next) {
@@ -352,6 +364,14 @@ int main(int argc, char* argv[]) {
         .help("max steps")
         .default_value(static_cast<size_t>(1000))
         .scan<'u', size_t>();
+    app.add_argument("--max-candidates")
+        .help("max candidates to try (0 = unlimited)")
+        .default_value(static_cast<size_t>(0))
+        .scan<'u', size_t>();
+    app.add_argument("--output-csv")
+        .help("save all halting patterns to results/bb_{n}_patterns.csv")
+        .default_value(false)
+        .implicit_value(true);
     app.add_argument("--save-time")
         .help("save elapsed time to CSV")
         .default_value(false)
@@ -368,6 +388,9 @@ int main(int argc, char* argv[]) {
     Config config;
     config["n_states"] = std::to_string(app.get<int>("n_states"));
     config["max_steps"] = std::to_string(app.get<size_t>("max_steps"));
+    config["max_candidates"] = std::to_string(app.get<size_t>("--max-candidates"));
+    if (app.get<bool>("--output-csv"))
+        config["output_csv"] = "1";
     if (app.get<bool>("--save-time"))
         config["save_time"] = "1";
 

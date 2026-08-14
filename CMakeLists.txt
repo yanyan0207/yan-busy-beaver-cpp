@@ -25,6 +25,4 @@ add_executable(bb_search src/bb_search.cpp src/bb_machine.cpp)
 target_link_libraries(bb_search PRIVATE argparse)
 
 enable_testing()
-
-add_executable(bb_test tests/test_main.cpp)
-add_test(NAME bb_test COMMAND bb_test)
+add_subdirectory(tests)
