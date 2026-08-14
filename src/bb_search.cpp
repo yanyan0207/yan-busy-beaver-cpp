@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "bb_assert.hpp"
 #include "bb_machine.hpp"
 
 using Config = std::unordered_map<std::string, std::string>;
@@ -42,11 +43,13 @@ void save_csv(int n_states, const Config& config, double elapsed_sec) {
 
     const std::string version = config.at("git_version");
     const std::string max_steps = config.at("max_steps");
-    const std::string key = std::format("{},{}", version, max_steps);
-    const std::string new_row = std::format("{},{},{:.3f}", version, max_steps, elapsed_sec);
+    const std::string ASSERT_ENABLED_str = ASSERT_ENABLED ? "true" : "false";
+    const std::string key = std::format("{},{},{}", version, max_steps, ASSERT_ENABLED_str);
+    const std::string new_row =
+        std::format("{},{},{},{:.3f}", version, max_steps, ASSERT_ENABLED_str, elapsed_sec);
 
     if (lines.empty())
-        lines.emplace_back("git_version,max_steps,elapsed_seconds");
+        lines.emplace_back("git_version,max_steps,ASSERT_ENABLED,elapsed_seconds");
 
     for (auto& l : lines) {
         if (l.starts_with(key)) {
@@ -88,6 +91,7 @@ void save_log(int n_states, size_t max_steps_arg, uint64_t best_steps, size_t ca
 
     std::ofstream f(path);
     f << "git_tag: " << version << '\n';
+    f << "ASSERT_ENABLED: " << (ASSERT_ENABLED ? "true" : "false") << '\n';
     f << "candidates_tried: " << candidates_tried << '\n';
     f << "max_steps: " << best_steps << '\n';
     f << "timeout_count: " << timeout_count << '\n';
