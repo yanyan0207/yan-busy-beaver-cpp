@@ -1,5 +1,5 @@
-git_tag: v0.1-1-gc76ee33
-candidates_tried: 2048
+git_tag: v0.2
+candidates_tried: 120
 max_steps: 6
-timeout_count: 1178
-max_patterns: ["0LB 0RH 1RA 1LB", "0RB 0RH 1LA 1RB", "1LB 0RH 0RB 1RA", "1LB 0RH 1RB 1RA", "1RB 0RH 0LB 1LA", "1RB 0RH 1LB 1LA", "1LB 0RB 1RA 0RH", "1LB 1RB 1RA 0RH", "1RB 0LB 1LA 0RH", "1RB 1LB 1LA 0RH"]
+timeout_count: 84
+max_patterns: ["0LB 0RH 1RA 1LB", "0RB 0RH 1LA 1RB", "1LB 0RH 0RB 1RA", "1LB 0RB 1RA 0RH", "1LB 1RB 1RA 0RH", "1LB 0RH 1RB 1RA", "1RB 0RH 0LB 1LA", "1RB 0LB 1LA 0RH", "1RB 1LB 1LA 0RH", "1RB 0RH 1LB 1LA"]
