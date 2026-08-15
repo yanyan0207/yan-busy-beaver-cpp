@@ -81,8 +81,13 @@ public:
         if (permit_count_diff_positive) {
             int64_t last_diff2_count = last_diff_count - last1_diff_count;
             int64_t last1_diff2_count = last1_diff_count - last2_diff_count;
-            if (last_diff2_count != last1_diff2_count || last_diff2_count < 0)
+            if (last_diff2_count < 0) {
                 return false;
+            }
+            if (last_diff2_count != last1_diff2_count &&
+                last_diff2_count != last1_diff2_count * 2) {
+                return false;
+            }
         } else {
             if (last_diff_count != last1_diff_count || last1_diff_count != last2_diff_count)
                 return false;
