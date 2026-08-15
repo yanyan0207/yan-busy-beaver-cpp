@@ -98,9 +98,10 @@ public:
     [[nodiscard]] size_t max_steps() const { return max_steps_; }
     [[nodiscard]] State current_state() const { return state_; }
     [[nodiscard]] Symbol current_symbol() const { return tape_.read(); }
-    [[nodiscard]] std::string format_tape(int window = 10) const {
+    [[nodiscard]] int64_t head_pos() const { return static_cast<int64_t>(tape_.head_pos()); }
+    [[nodiscard]] std::string format_tape(int from, int to) const {
         std::string s = "...";
-        for (int r = -window; r <= window; ++r) {
+        for (int r = from; r <= to; ++r) {
             const char cell = '0' + static_cast<int>(tape_.read_at(r));
             if (r == 0) {
                 s += '[';
@@ -111,9 +112,12 @@ public:
         }
         return s + "...";
     }
+    [[nodiscard]] std::string format_tape(int window = 10) const {
+        return format_tape(-window, window);
+    }
 
     Transition run();
-    bool check_loop();
+    int64_t check_loop();  // returns step where loop detected, -1 if not
 
 protected:
     const Instruction& move_one_step();

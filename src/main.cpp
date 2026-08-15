@@ -11,18 +11,30 @@ public:
     using BbMachine::BbMachine;
 
     Transition run_debug() {
+        int64_t min_pos = 0, max_pos = 0;
         for (size_t i = this->count(); i < this->max_steps(); ++i) {
             const auto prev_state = this->current_state();
             const auto prev_sym = this->current_symbol();
             const auto& instr = this->move_one_step();
 
+            const int64_t pos = this->head_pos();
+            min_pos = std::min(min_pos, pos);
+            max_pos = std::max(max_pos, pos);
+
             const char next_char = instr.next == -1 ? 'H' : static_cast<char>('A' + instr.next);
-            std::println("step {:6}: {}{} -> {}{}{}  {}", this->count(),
+            const int64_t loop_step = !instr.is_halt() ? this->check_loop() : -1;
+            const std::string loop_str =
+                loop_step >= 0 ? std::format("  [LOOP@{}]", loop_step) : std::string();
+            const int from = static_cast<int>(min_pos - pos);
+            const int to = static_cast<int>(max_pos - pos);
+            std::println("step {:6}: {}{} -> {}{}{}  {}{}", this->count(),
                          static_cast<char>('A' + prev_state), static_cast<int>(prev_sym),
                          static_cast<int>(instr.write), instr.dir == Dir::R ? 'R' : 'L', next_char,
-                         this->format_tape());
+                         this->format_tape(from, to), loop_str);
 
             if (instr.is_halt())
+                return {.state = prev_state, .value = prev_sym, .instr = instr};
+            if (loop_step >= 0)
                 return {.state = prev_state, .value = prev_sym, .instr = instr};
         }
         // timeout: return current state without executing
@@ -103,8 +115,11 @@ int main(int argc, char* argv[]) {
         std::println("result: halt");
     } else {
         std::println("result: timeout — running check_loop...");
-        const bool loop = m->check_loop();
-        std::println("check_loop: {}", loop ? "loop detected" : "no loop detected");
+        const int64_t loop_step = m->check_loop();
+        if (loop_step >= 0)
+            std::println("check_loop: loop detected at step {}", loop_step);
+        else
+            std::println("check_loop: no loop detected");
     }
 
     delete m;
