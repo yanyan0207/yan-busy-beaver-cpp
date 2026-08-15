@@ -97,6 +97,7 @@ bool BbMachine::check_loop() {
     BbMachine m(num_states_, max_steps_);
     m.table_ = table_;
 
+    BbStateHistory bb_state_history;
     BbStateHistory max_head_pos_history;
     BbStateHistory min_head_pos_history;
     for (size_t i = 0; i < count_; ++i) {
@@ -106,6 +107,9 @@ bool BbMachine::check_loop() {
         m.state_ = instruction.next;
 
         auto head_pos = static_cast<int64_t>(m.tape_.head_pos());
+        bb_state_history.add(i, head_pos, m.state_, m.tape_.read());
+        if (bb_state_history.check_periodicity())
+            return true;
         if (head_pos > max_head_pos_history.last_pos()) {
             max_head_pos_history.add(i, head_pos, m.state_, m.tape_.read());
             if (max_head_pos_history.check_periodicity())
