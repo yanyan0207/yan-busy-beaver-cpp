@@ -210,6 +210,8 @@ public:
         return transitions_[state * 2 + static_cast<int>(value)];
     }
     [[nodiscard]] const std::vector<Instruction>& get_instructions() const { return transitions_; }
+    [[nodiscard]] const std::vector<int>& get_index_stack() const { return index_stack_; }
+    [[nodiscard]] int get_index_stack_size() const { return index_stack_size_; }
 
 private:
     std::vector<Instruction> transitions_;
@@ -228,6 +230,51 @@ public:
         transition_list_.push(0, Symbol::ZERO, fist_instr);
     }
 
+    bool check_meaningfulness() {
+        const auto& instructions = transition_list_.get_instructions();
+        const auto& index_stack = transition_list_.get_index_stack();
+        int index_stack_size = transition_list_.get_index_stack_size();
+
+        // check A0 is "R"
+        if (instructions[0].dir != Dir::R)
+            return false;
+
+        // check B,C,Dの状態が歯抜けでないかチェック
+        std::vector<bool> state_used(n_states_, false);
+
+        int max_state = -1;
+        for (int i = 0; i < index_stack_size; ++i) {
+            const auto& instruction = instructions[index_stack[i]];
+            assert(!instruction.is_halt());
+            state_used[instruction.next] = true;
+            if (static_cast<int>(instruction.next) > max_state)
+                max_state = static_cast<int>(instruction.next);
+        }
+
+        // Bから最大の状態までがすべて使われているかチェック
+        for (int s = 1; s < max_state; ++s) {
+            if (!state_used[s])
+                return false;
+        }
+
+        // Haltが到達可能かチェック
+        // HaltがAにあって、Aに遷移可能な場合はOK
+        bool halt_reachable = false;
+        if (instructions[1].is_halt() && state_used[0])
+            halt_reachable = true;
+        // Haltが到達可能な状態にあればOK
+        else {
+            for (int s = 1; s <= max_state; ++s) {
+                if (instructions[s * 2].is_halt() || instructions[s * 2 + 1].is_halt()) {
+                    halt_reachable = true;
+                    break;
+                }
+            }
+        }
+
+        return halt_reachable;
+    }
+
     bool next() {
         while (true) {
             // get next possible instruction for the current slot
@@ -235,6 +282,11 @@ public:
 
             if (next_instr) {
                 transition_list_.set(*next_instr);
+
+                // check meaningfulness
+                bool meaningful = check_meaningfulness();
+                if (!meaningful)
+                    continue;  // try next instruction for the current slot
                 return true;
             } else {
                 if (!pop())
@@ -247,6 +299,8 @@ public:
         bool pushed = transition_list_.push(state, value, possible_instructions_.get(0));
         if (pushed) {
             possible_instructions_.reset();
+            if (!check_meaningfulness())
+                return next();
             return true;
         } else {
             return next();
