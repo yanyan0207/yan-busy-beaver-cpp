@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <string>
 #include <vector>
 
 using State = int;
@@ -28,6 +29,13 @@ public:
         head_ += static_cast<int>(dir);
     }
     [[nodiscard]] Symbol read() const { return static_cast<Symbol>(data_[head_ + offset_]); }
+    [[nodiscard]] size_t head_pos() const { return head_; }
+    [[nodiscard]] Symbol read_at(int offset) const {
+        const size_t idx = head_ + static_cast<size_t>(offset) + offset_;
+        if (idx >= size_)
+            return Symbol::ZERO;
+        return static_cast<Symbol>(data_[idx]);
+    }
 };
 
 struct Instruction {
@@ -87,8 +95,28 @@ public:
         return table_.get_instructions();
     }
     [[nodiscard]] uint64_t count() const { return count_; }
+    [[nodiscard]] size_t max_steps() const { return max_steps_; }
+    [[nodiscard]] State current_state() const { return state_; }
+    [[nodiscard]] Symbol current_symbol() const { return tape_.read(); }
+    [[nodiscard]] std::string format_tape(int window = 10) const {
+        std::string s = "...";
+        for (int r = -window; r <= window; ++r) {
+            const char cell = '0' + static_cast<int>(tape_.read_at(r));
+            if (r == 0) {
+                s += '[';
+                s += cell;
+                s += ']';
+            } else
+                s += cell;
+        }
+        return s + "...";
+    }
 
     Transition run();
+    bool check_loop();
+
+protected:
+    const Instruction& move_one_step();
 
 private:
     int num_states_ = 0;

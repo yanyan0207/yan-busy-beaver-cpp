@@ -52,13 +52,15 @@ void save_csv(int n_states, const Config& config, double elapsed_sec) {
         return it != config.end() ? it->second : std::string("0");
     };
     const std::string new_row = std::format(
-        "{},{},{},{:.3f},{},{},{},{},{},{}", version, max_steps, ASSERT_ENABLED_str, elapsed_sec,
-        get("stat_setup_count"), get("stat_setup_total_sec"), get("stat_run_count"),
-        get("stat_run_total_sec"), get("stat_dfs_count"), get("stat_dfs_total_sec"));
+        "{},{},{},{:.3f},{},{},{},{},{},{},{},{}", version, max_steps, ASSERT_ENABLED_str,
+        elapsed_sec, get("stat_setup_count"), get("stat_setup_total_sec"), get("stat_run_count"),
+        get("stat_run_total_sec"), get("stat_dfs_count"), get("stat_dfs_total_sec"),
+        get("stat_loop_count"), get("stat_loop_total_sec"));
 
     const std::string header =
         "git_version,max_steps,ASSERT_ENABLED,elapsed_seconds,"
-        "setup_count,setup_total_sec,run_count,run_total_sec,dfs_count,dfs_total_sec";
+        "setup_count,setup_total_sec,run_count,run_total_sec,dfs_count,dfs_total_sec,"
+        "loop_count,loop_total_sec";
     if (lines.empty())
         lines.emplace_back(header);
     else if (lines[0] != header)
@@ -97,7 +99,7 @@ std::string table_to_notation(const std::vector<Instruction>& table) {
 }
 
 void save_log(int n_states, size_t max_steps_arg, uint64_t best_steps, size_t candidates_tried,
-              size_t timeout_count, const std::vector<std::string>& max_patterns,
+              size_t timeout_count, size_t loop_count, const std::vector<std::string>& max_patterns,
               const std::string& version) {
     std::filesystem::create_directories("results");
     const std::string path = std::format("results/{}states_{}steps.log", n_states, max_steps_arg);
@@ -108,6 +110,7 @@ void save_log(int n_states, size_t max_steps_arg, uint64_t best_steps, size_t ca
     f << "candidates_tried: " << candidates_tried << '\n';
     f << "max_steps: " << best_steps << '\n';
     f << "timeout_count: " << timeout_count << '\n';
+    f << "loop_count: " << loop_count << '\n';
     f << "max_patterns: [";
     for (size_t i = 0; i < max_patterns.size(); ++i) {
         if (i > 0)
@@ -344,17 +347,19 @@ void search(const Config& config) {
     std::vector<std::string> max_patterns;
     size_t candidates_tried = 0;
     size_t timeout_count = 0;
+    size_t loop_count = 0;
 
     std::ofstream csv_file;
     if (output_csv) {
         std::filesystem::create_directories("results");
         csv_file.open(std::format("results/bb_{}_patterns.csv", n_states));
-        csv_file << "pattern,steps,setup_usec,run_usec\n";
+        csv_file << "pattern,steps,result,setup_usec,run_usec\n";
     }
 
     Stat stat_setup;
     Stat stat_run;
     Stat stat_dfs;
+    Stat stat_loop;
 
     const auto t_start = std::chrono::steady_clock::now();
 
@@ -393,7 +398,21 @@ void search(const Config& config) {
                          : static_cast<char>('A' + last_transition.instr.next));
 #endif
         if (last_transition.instr.is_halt() == false) {
-            ++timeout_count;
+            stat_loop.start();
+            bool loop = m.check_loop();
+            stat_loop.stop();
+            if (loop)
+                ++loop_count;
+            else
+                ++timeout_count;
+            if (output_csv) {
+                const std::string notation = table_to_notation(m.get_instructions());
+                csv_file << notation << ',' << m.count() << ',' << (loop ? "loop" : "timeout")
+                         << ','
+                         << std::format("{:.3f},{:.3f}", stat_setup.last_ms() * 1000.0,
+                                        stat_run.last_ms() * 1000.0)
+                         << '\n';
+            }
             stat_dfs.start();
             bool has_next = enumerator.next();
             stat_dfs.stop();
@@ -402,7 +421,7 @@ void search(const Config& config) {
         } else {
             const std::string notation = table_to_notation(m.get_instructions());
             if (output_csv) {
-                csv_file << notation << ',' << m.count() << ','
+                csv_file << notation << ',' << m.count() << ',' << "halt" << ','
                          << std::format("{:.3f},{:.3f}", stat_setup.last_ms() * 1000.0,
                                         stat_run.last_ms() * 1000.0)
                          << '\n';
@@ -431,11 +450,12 @@ void search(const Config& config) {
     std::println("{}", stat_setup.format("stat_setup"));
     std::println("{}", stat_run.format("stat_run"));
     std::println("{}", stat_dfs.format("stat_dfs"));
+    std::println("{}", stat_loop.format("stat_loop"));
 #endif
 
     const std::string version = git_version();
-    save_log(n_states, max_steps, best_steps, candidates_tried, timeout_count, max_patterns,
-             version);
+    save_log(n_states, max_steps, best_steps, candidates_tried, timeout_count, loop_count,
+             max_patterns, version);
 
     if (save_time) {
         Config c = config;
@@ -447,6 +467,8 @@ void search(const Config& config) {
         c["stat_run_total_sec"] = std::format("{:.6f}", stat_run.total_ms / 1000.0);
         c["stat_dfs_count"] = std::to_string(stat_dfs.count);
         c["stat_dfs_total_sec"] = std::format("{:.6f}", stat_dfs.total_ms / 1000.0);
+        c["stat_loop_count"] = std::to_string(stat_loop.count);
+        c["stat_loop_total_sec"] = std::format("{:.6f}", stat_loop.total_ms / 1000.0);
 #endif
         save_csv(n_states, c, elapsed);
     }

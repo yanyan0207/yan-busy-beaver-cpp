@@ -24,6 +24,7 @@ option(BB_STAT "Enable per-phase timing statistics" ON)
 
 add_executable(bb src/main.cpp src/bb_machine.cpp)
 add_executable(bb_search src/bb_search.cpp src/bb_machine.cpp)
+target_link_libraries(bb PRIVATE argparse)
 target_link_libraries(bb_search PRIVATE argparse)
 
 if(BB_STAT)
