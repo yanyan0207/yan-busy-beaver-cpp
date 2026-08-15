@@ -21,6 +21,7 @@ if(CLANG_TIDY_EXE)
 endif()
 
 option(BB_STAT "Enable per-phase timing statistics" ON)
+option(BB_DEBUG_PERIODICITY "Enable debug output in check_periodicity" OFF)
 
 add_executable(bb src/main.cpp src/bb_machine.cpp)
 add_executable(bb_search src/bb_search.cpp src/bb_machine.cpp)
@@ -29,6 +30,11 @@ target_link_libraries(bb_search PRIVATE argparse)
 
 if(BB_STAT)
     target_compile_definitions(bb_search PRIVATE BB_STAT)
+endif()
+
+if(BB_DEBUG_PERIODICITY)
+    target_compile_definitions(bb PRIVATE BB_DEBUG_PERIODICITY)
+    target_compile_definitions(bb_search PRIVATE BB_DEBUG_PERIODICITY)
 endif()
 
 enable_testing()

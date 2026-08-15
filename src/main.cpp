@@ -10,7 +10,7 @@ class DebugBbMachine : public BbMachine {
 public:
     using BbMachine::BbMachine;
 
-    Transition run_debug() {
+    Transition run_debug(bool show_steps, bool check_loop_each_step) {
         int64_t min_pos = 0, max_pos = 0;
         for (size_t i = this->count(); i < this->max_steps(); ++i) {
             const auto prev_state = this->current_state();
@@ -21,16 +21,20 @@ public:
             min_pos = std::min(min_pos, pos);
             max_pos = std::max(max_pos, pos);
 
-            const char next_char = instr.next == -1 ? 'H' : static_cast<char>('A' + instr.next);
-            const int64_t loop_step = !instr.is_halt() ? this->check_loop() : -1;
-            const std::string loop_str =
-                loop_step >= 0 ? std::format("  [LOOP@{}]", loop_step) : std::string();
-            const int from = static_cast<int>(min_pos - pos);
-            const int to = static_cast<int>(max_pos - pos);
-            std::println("step {:6}: {}{} -> {}{}{}  {}{}", this->count(),
-                         static_cast<char>('A' + prev_state), static_cast<int>(prev_sym),
-                         static_cast<int>(instr.write), instr.dir == Dir::R ? 'R' : 'L', next_char,
-                         this->format_tape(from, to), loop_str);
+            const int64_t loop_step =
+                (check_loop_each_step && !instr.is_halt()) ? this->check_loop() : -1;
+
+            if (show_steps) {
+                const char next_char = instr.next == -1 ? 'H' : static_cast<char>('A' + instr.next);
+                const std::string loop_str =
+                    loop_step >= 0 ? std::format("  [LOOP@{}]", loop_step) : std::string();
+                const int from = static_cast<int>(min_pos - pos);
+                const int to = static_cast<int>(max_pos - pos);
+                std::println("step {:6}: {}{} -> {}{}{}  {}{}", this->count(),
+                             static_cast<char>('A' + prev_state), static_cast<int>(prev_sym),
+                             static_cast<int>(instr.write), instr.dir == Dir::R ? 'R' : 'L',
+                             next_char, this->format_tape(from, to), loop_str);
+            }
 
             if (instr.is_halt())
                 return {.state = prev_state, .value = prev_sym, .instr = instr};
@@ -88,6 +92,10 @@ int main(int argc, char* argv[]) {
         .help("print each step with tape")
         .default_value(false)
         .implicit_value(true);
+    app.add_argument("--check-loop")
+        .help("call check_loop at each step and stop when loop detected")
+        .default_value(false)
+        .implicit_value(true);
 
     try {
         app.parse_args(argc, argv);
@@ -99,6 +107,7 @@ int main(int argc, char* argv[]) {
 
     const auto max_steps = app.get<size_t>("--max-steps");
     const bool debug = app.get<bool>("--debug");
+    const bool check_loop_each_step = app.get<bool>("--check-loop");
     const auto notation = app.get<std::string>("notation");
 
     std::println("notation:  {}", notation);
@@ -108,7 +117,7 @@ int main(int argc, char* argv[]) {
     parse(notation, &m, max_steps);
 
     std::println("running...");
-    const auto result = debug ? m->run_debug() : m->run();
+    const auto result = m->run_debug(debug, check_loop_each_step);
     std::println("steps: {}", m->count());
 
     if (result.instr.is_halt()) {
