@@ -99,6 +99,7 @@ class BbMachineUnstoppableChecker {
     struct MachineHistory {
         std::vector<MachineState> states;
         std::vector<Instruction> instructions;
+        std::vector<int64_t> positions;
     };
 
     bool check_same_loop();
@@ -109,5 +110,6 @@ public:
 
 private:
     BbMachine m_;
+    std::unique_ptr<BbMachine> m_same_loop_;
     MachineHistory history_;
 };
