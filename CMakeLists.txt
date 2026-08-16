@@ -24,6 +24,7 @@ if(CLANG_TIDY_EXE)
 endif()
 
 option(BB_STAT "Enable per-phase timing statistics" ON)
+option(BB_CHECKER_STAT "Enable detailed BbMachineUnstoppableChecker timing (use with --checker-stat)" ON)
 option(BB_DEBUG_PERIODICITY "Enable debug output in check_periodicity" OFF)
 
 set(BB_CORE_SOURCES
@@ -38,6 +39,10 @@ target_link_libraries(bb_search PRIVATE argparse)
 
 if(BB_STAT)
     target_compile_definitions(bb_search PRIVATE BB_STAT)
+endif()
+if(BB_CHECKER_STAT)
+    target_compile_definitions(bb_search PRIVATE BB_CHECKER_STAT)
+    target_compile_definitions(bb_search PRIVATE BB_STAT)  # CheckerStat = Stat が必要
 endif()
 
 if(BB_DEBUG_PERIODICITY)

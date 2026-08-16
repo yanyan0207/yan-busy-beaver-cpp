@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "bb_machine.hpp"
+#include "bb_stat.hpp"
 #include "bb_types.hpp"
 
 class Block {
@@ -107,6 +108,26 @@ class BbMachineUnstoppableChecker {
 public:
     BbMachineUnstoppableChecker(const BbMachine& m);
     int64_t check();  // 検出ステップを返す。未検出は -1
+
+#ifdef BB_STAT
+    void enable_stat() {
+        stat_move.enabled = true;
+        stat_history_push.enabled = true;
+        stat_create_state.enabled = true;
+        stat_same_loop.enabled = true;
+        stat_trial.enabled = true;
+        stat_tape_compare.enabled = true;
+    }
+#else
+    void enable_stat() {}
+#endif
+
+    CheckerStat stat_move{false};
+    CheckerStat stat_history_push{false};
+    CheckerStat stat_create_state{false};
+    CheckerStat stat_same_loop{false};
+    CheckerStat stat_trial{false};
+    CheckerStat stat_tape_compare{false};
 
 private:
     BbMachine m_;

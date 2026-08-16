@@ -352,6 +352,7 @@ void search(const Config& config) {
     const size_t max_candidates = std::stoull(config.at("max_candidates"));
     const bool save_time = config.count("save_time") > 0;
     const bool output_csv = config.count("output_csv") > 0;
+    const bool checker_stat = config.count("checker_stat") > 0;
 
     const Instruction halt = {.write = Symbol::ZERO, .dir = Dir::R, .next = -1};
 
@@ -377,6 +378,14 @@ void search(const Config& config) {
     Stat stat_dfs;
     Stat stat_check_loop;
     Stat stat_unstoppable_checker;
+#ifdef BB_CHECKER_STAT
+    CheckerStat stat_checker_move;
+    CheckerStat stat_checker_history_push;
+    CheckerStat stat_checker_create_state;
+    CheckerStat stat_checker_same_loop;
+    CheckerStat stat_checker_trial;
+    CheckerStat stat_checker_tape_compare;
+#endif
 
     const auto t_start = std::chrono::steady_clock::now();
 
@@ -420,9 +429,19 @@ void search(const Config& config) {
             stat_check_loop.stop();
             stat_unstoppable_checker.start();
             BbMachineUnstoppableChecker checker(m);
+            if (checker_stat)
+                checker.enable_stat();
             const int64_t unstoppable_checker_step = checker.check();
             const bool unstoppable_checker_detected = unstoppable_checker_step >= 0;
             stat_unstoppable_checker.stop();
+#ifdef BB_CHECKER_STAT
+            stat_checker_move.add(checker.stat_move);
+            stat_checker_history_push.add(checker.stat_history_push);
+            stat_checker_create_state.add(checker.stat_create_state);
+            stat_checker_same_loop.add(checker.stat_same_loop);
+            stat_checker_trial.add(checker.stat_trial);
+            stat_checker_tape_compare.add(checker.stat_tape_compare);
+#endif
             const bool check_loop_detected = loop_step >= 0;
             if (check_loop_detected)
                 ++check_loop_count;
@@ -494,6 +513,16 @@ void search(const Config& config) {
     std::println("{}", stat_dfs.format("stat_dfs"));
     std::println("{}", stat_check_loop.format("stat_check_loop"));
     std::println("{}", stat_unstoppable_checker.format("stat_unstoppable_checker"));
+#ifdef BB_CHECKER_STAT
+    if (checker_stat) {
+        std::println("{}", stat_checker_move.format("  checker_move"));
+        std::println("{}", stat_checker_history_push.format("  checker_history_push"));
+        std::println("{}", stat_checker_create_state.format("  checker_create_state"));
+        std::println("{}", stat_checker_same_loop.format("  checker_same_loop"));
+        std::println("{}", stat_checker_trial.format("    checker_trial"));
+        std::println("{}", stat_checker_tape_compare.format("    checker_tape_compare"));
+    }
+#endif
 #endif
 
     const std::string version = git_version();
@@ -545,6 +574,10 @@ int main(int argc, char* argv[]) {
         .help("save elapsed time to CSV")
         .default_value(false)
         .implicit_value(true);
+    app.add_argument("--checker-stat")
+        .help("print detailed BbMachineUnstoppableChecker timing stats (requires BB_STAT build)")
+        .default_value(false)
+        .implicit_value(true);
 
     try {
         app.parse_args(argc, argv);
@@ -562,6 +595,8 @@ int main(int argc, char* argv[]) {
         config["output_csv"] = "1";
     if (app.get<bool>("--save-time"))
         config["save_time"] = "1";
+    if (app.get<bool>("--checker-stat"))
+        config["checker_stat"] = "1";
 
     std::println("n={}, max_steps={}", config["n_states"], config["max_steps"]);
     search(config);
