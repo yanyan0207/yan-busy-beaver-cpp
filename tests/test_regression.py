@@ -54,10 +54,7 @@ def _generate_v01_csv(n: int, path: Path) -> None:
 
 def _load_v01_halting(n: int) -> dict[str, int]:
     """Python v0.1 CSV からハルトパターン（steps > 0）だけ C++ 表記で返す。"""
-    path = _v01_csv_path(n)
-    if not path.exists():
-        print(f"\nv0.1 CSV が存在しないため生成中: {path}", flush=True)
-        _generate_v01_csv(n, path)
+    path = _ensure_v01_csv(n)
 
     result: dict[str, int] = {}
     with open(path, newline="", encoding="utf-8") as f:
@@ -76,8 +73,8 @@ def _load_v01_halting(n: int) -> dict[str, int]:
     return result
 
 
-def _run_bb_search(n: int) -> dict[str, int]:
-    """bb_search を --output-csv で実行し、ハルトパターン辞書を返す。"""
+def _run_bb_search_csv(n: int) -> Path:
+    """bb_search を --output-csv で実行し、CSV ファイルパスを返す。"""
     if not _BB_SEARCH.exists():
         pytest.skip(f"bb_search.exe が見つかりません: {_BB_SEARCH}")
     subprocess.run(
@@ -85,11 +82,61 @@ def _run_bb_search(n: int) -> dict[str, int]:
         check=True,
         capture_output=True,
     )
-    out_csv = _PROJECT_DIR / "results" / f"bb_{n}_patterns.csv"
+    return _PROJECT_DIR / "results" / f"bb_{n}_patterns.csv"
+
+
+def _run_bb_search(n: int) -> dict[str, int]:
+    """bb_search を --output-csv で実行し、ハルトパターン辞書を返す。"""
+    out_csv = _run_bb_search_csv(n)
     result: dict[str, int] = {}
     with open(out_csv, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             result[row["pattern"]] = int(row["steps"])
+    return result
+
+
+def _run_bb_search_full(n: int) -> dict[str, dict[str, str]]:
+    """bb_search を --output-csv で実行し、全パターンの行辞書を返す。"""
+    out_csv = _run_bb_search_csv(n)
+    result: dict[str, dict[str, str]] = {}
+    with open(out_csv, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            result[row["pattern"]] = dict(row)
+    return result
+
+
+_V01_CSV_COLUMNS = {"pattern", "steps", "elapsed_ms", "growth_pattern", "loop_shift"}
+
+
+def _ensure_v01_csv(n: int) -> Path:
+    """v0.1 CSV が最新フォーマットで存在することを確認し、パスを返す。"""
+    path = _v01_csv_path(n)
+    if path.exists():
+        with open(path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            if reader.fieldnames and _V01_CSV_COLUMNS <= set(reader.fieldnames):
+                return path
+        path.unlink()
+    print(f"\nv0.1 CSV を生成中: {path}", flush=True)
+    _generate_v01_csv(n, path)
+    return path
+
+
+def _load_v01_loop_shifts(n: int) -> dict[str, int]:
+    """Python v0.1 CSV からループパターン（steps < 0）の loop_shift 辞書を返す。"""
+    path = _ensure_v01_csv(n)
+    result: dict[str, int] = {}
+    with open(path, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            if int(row["steps"]) >= 0:
+                continue
+            pattern = ast.literal_eval(row["pattern"])
+            tokens = [
+                instr if instr is not None else "0RH"
+                for row_ in pattern
+                for instr in row_
+            ]
+            result[" ".join(tokens)] = int(row["loop_shift"])
     return result
 
 
@@ -104,6 +151,42 @@ def _assert_csv_match(v01: dict[str, int], cpp: dict[str, int]) -> None:
     assert not missing, f"v0.1 にあって C++ に無いパターン: {missing}"
     mismatches = {p: (cpp[p], v01[p]) for p in v01 if cpp[p] != v01[p]}
     assert not mismatches, f"ステップ数不一致 (cpp, v01): {mismatches}"
+
+
+class TestCheckSameLoop:
+    """C++ check_same_loop (BbMachineUnstoppableChecker) の正当性検証。
+
+    unstoppable_checker_detected=true のパターンは Python でも定位置ループ
+    (loop_shift=0) として検出されることを確認する。
+    """
+
+    def _assert_no_false_positives(self, n: int) -> None:
+        v01_loops = _load_v01_loop_shifts(n)
+        cpp_all = _run_bb_search_full(n)
+
+        false_positives = []
+        for pattern, row in cpp_all.items():
+            if row.get("unstoppable_checker_detected") != "true":
+                continue
+            if pattern not in v01_loops:
+                false_positives.append(
+                    f"{pattern}: C++ unstoppable だが Python でループ未検出"
+                )
+            elif v01_loops[pattern] != 0:
+                false_positives.append(
+                    f"{pattern}: C++ unstoppable だが Python loop_shift={v01_loops[pattern]} (0 以外)"
+                )
+
+        assert not false_positives, "\n".join(false_positives)
+
+    def test_2states(self) -> None:
+        self._assert_no_false_positives(2)
+
+    def test_3states(self) -> None:
+        self._assert_no_false_positives(3)
+
+    def test_4states(self) -> None:
+        self._assert_no_false_positives(4)
 
 
 class TestRegressionV01:

@@ -24,7 +24,7 @@ def run_search(
     max_patterns: list[list[list[str | None]]] = []
 
     writer = csv.writer(sys.stdout, lineterminator="\n")
-    writer.writerow(["pattern", "steps", "elapsed_ms", "growth_pattern"])
+    writer.writerow(["pattern", "steps", "elapsed_ms", "growth_pattern", "loop_shift"])
 
     candidates_tried = 0
 
@@ -86,7 +86,14 @@ def run_search(
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
-        writer.writerow([str(pattern), steps, f"{elapsed_ms:.3f}", growth_pattern])
+        loop_shift = tm.loop_shift if steps < 0 else ""
+        writer.writerow([
+            str(pattern),
+            steps,
+            f"{elapsed_ms:.3f}",
+            growth_pattern,
+            loop_shift,
+        ])
 
         candidates_tried += 1
 

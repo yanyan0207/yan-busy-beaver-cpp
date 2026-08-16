@@ -37,7 +37,8 @@ class MachineState:
     def read(self) -> list[int]:
         return self.tape[self.min_position : self.max_position + 1]
 
-    def check_loop(self) -> bool:
+    def check_loop(self) -> int | None:
+        """ループを検出し、ヘッドの平行移動量を返す。ループなしは None。0 は定位置ループ。"""
         old_min_position = len(self.tape)
         old_max_position = 0
         for prev_state in self.history[::-1]:
@@ -53,7 +54,7 @@ class MachineState:
                 ]
                 current_tape_slice = self.tape[old_min_position : old_max_position + 1]
                 if old_tape_slice == current_tape_slice:
-                    return True
+                    return 0
             elif prev_state.head_position < self.head_position:
                 diff = self.head_position - prev_state.head_position
                 old_tape_slice = prev_state.tape[
@@ -63,7 +64,7 @@ class MachineState:
                     old_min_position + diff : self.max_position + 1
                 ]
                 if old_tape_slice == current_tape_slice:
-                    return True
+                    return diff
             else:
                 diff = prev_state.head_position - self.head_position
                 old_tape_slice = prev_state.tape[
@@ -73,9 +74,9 @@ class MachineState:
                     self.min_position : old_max_position - diff + 1
                 ]
                 if old_tape_slice == current_tape_slice:
-                    return True
+                    return -diff
 
-        return False
+        return None
 
     def check_sweep_growth_pattern(self) -> bool:
         if len(self.history) < 100:
@@ -193,6 +194,7 @@ class TransitionMachine:
             [(0, 0, -1) for _ in range(2)] for _ in range(state_num)
         ]
         self.machine = MachineState(initial_head_position)
+        self.loop_shift: int | None = None
 
     def _get_instruction(self, instruction_code: str) -> tuple[int, int, int]:
         assert len(instruction_code) == 3, "Instruction code must be 3 characters long"
@@ -298,7 +300,9 @@ class TransitionMachine:
             if instruction[2] == -1:
                 return i + 1, instruction  # halted
 
-            if self.machine.check_loop():
+            loop_shift = self.machine.check_loop()
+            if loop_shift is not None:
+                self.loop_shift = loop_shift
                 return -(i + 1), instruction  # loop detected
 
         return 0, instruction  # timeout
