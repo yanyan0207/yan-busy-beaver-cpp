@@ -132,9 +132,9 @@ int main(int argc, char* argv[]) {
             std::println("check_loop: no loop detected");
 
         BbMachineUnstoppableChecker checker(*m);
-        const bool unstoppable_checker_detected = checker.check();
-        if (unstoppable_checker_detected)
-            std::println("unstoppable_checker: loop detected");
+        const int64_t unstoppable_step = checker.check();
+        if (unstoppable_step >= 0)
+            std::println("unstoppable_checker: loop detected at step {}", unstoppable_step);
         else
             std::println("unstoppable_checker: no loop detected");
     }

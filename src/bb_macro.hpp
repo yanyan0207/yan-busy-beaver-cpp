@@ -106,7 +106,7 @@ class BbMachineUnstoppableChecker {
 
 public:
     BbMachineUnstoppableChecker(const BbMachine& m);
-    bool check();
+    int64_t check();  // 検出ステップを返す。未検出は -1
 
 private:
     BbMachine m_;

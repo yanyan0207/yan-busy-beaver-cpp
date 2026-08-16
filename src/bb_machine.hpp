@@ -28,9 +28,11 @@ public:
         data_[head_ + offset_] = static_cast<char>(value);
         head_ += static_cast<int>(dir);
     }
-    [[nodiscard]] Symbol read() const {
-        assert(head_ + offset_ < size_);
-        return static_cast<Symbol>(data_[head_ + offset_]);
+    [[nodiscard]] Symbol read() const { return read(static_cast<int64_t>(head_)); }
+    [[nodiscard]] Symbol read(int64_t pos) const {
+        const size_t idx = static_cast<size_t>(pos) + offset_;
+        assert(idx < size_);
+        return static_cast<Symbol>(data_[idx]);
     }
     [[nodiscard]] size_t head_pos() const { return head_; }
     [[nodiscard]] Symbol read_offset_from_head(int offset) const {
@@ -64,7 +66,7 @@ public:
     [[nodiscard]] State current_state() const { return state_; }
     [[nodiscard]] Symbol current_symbol() const { return tape_.read(); }
     [[nodiscard]] int64_t head_pos() const { return static_cast<int64_t>(tape_.head_pos()); }
-    [[nodiscard]] Symbol read(int64_t pos) const { return tape_.read_offset_from_head(pos); }
+    [[nodiscard]] Symbol read(int64_t pos) const { return tape_.read(pos); }
     [[nodiscard]] std::string format_tape(int from, int to) const {
         std::string s = std::format("(pos={:5}) ...", head_pos());
         for (int r = from; r <= to; ++r) {

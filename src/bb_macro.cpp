@@ -13,7 +13,7 @@ BbMachineUnstoppableChecker::BbMachineUnstoppableChecker(const BbMachine& m)
     }
 }
 
-bool BbMachineUnstoppableChecker::check() {
+int64_t BbMachineUnstoppableChecker::check() {
     assert(m_.count() == 0);
 
     int64_t max_pos = m_.head_pos();
@@ -21,7 +21,7 @@ bool BbMachineUnstoppableChecker::check() {
     for (size_t i = 0; i < m_.max_steps(); ++i) {
         const auto& instruction = m_.move_one_step();
         if (instruction.is_halt()) {
-            return false;
+            return -1;
         }
 
         history_.instructions.push_back(instruction);
@@ -33,11 +33,11 @@ bool BbMachineUnstoppableChecker::check() {
         history_.states.push_back(create_machine_state(m_, max_pos, min_pos));
 
         if (check_same_loop()) {
-            return true;
+            return static_cast<int64_t>(m_.count());
         }
     }
 
-    return false;
+    return -1;
 }
 
 bool BbMachineUnstoppableChecker::check_same_loop() {

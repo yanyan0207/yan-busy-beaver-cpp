@@ -73,8 +73,13 @@ def _load_v01_halting(n: int) -> dict[str, int]:
     return result
 
 
+_bb_search_csv_cache: dict[int, Path] = {}
+
+
 def _run_bb_search_csv(n: int) -> Path:
-    """bb_search を --output-csv で実行し、CSV ファイルパスを返す。"""
+    """bb_search を --output-csv で実行し、CSV ファイルパスを返す（セッション内キャッシュ）。"""
+    if n in _bb_search_csv_cache:
+        return _bb_search_csv_cache[n]
     if not _BB_SEARCH.exists():
         pytest.skip(f"bb_search.exe が見つかりません: {_BB_SEARCH}")
     subprocess.run(
@@ -82,7 +87,9 @@ def _run_bb_search_csv(n: int) -> Path:
         check=True,
         capture_output=True,
     )
-    return _PROJECT_DIR / "results" / f"bb_{n}_patterns.csv"
+    path = _PROJECT_DIR / "results" / f"bb_{n}_patterns.csv"
+    _bb_search_csv_cache[n] = path
+    return path
 
 
 def _run_bb_search(n: int) -> dict[str, int]:
@@ -107,6 +114,41 @@ def _run_bb_search_full(n: int) -> dict[str, dict[str, str]]:
 
 _V01_CSV_COLUMNS = {"pattern", "steps", "elapsed_ms", "growth_pattern", "loop_shift"}
 
+_v01_machine_module = None
+
+
+def _get_v01_machine_module():
+    global _v01_machine_module
+    if _v01_machine_module is not None:
+        return _v01_machine_module
+    if "v01_bb_machine" in sys.modules:
+        _v01_machine_module = sys.modules["v01_bb_machine"]
+        return _v01_machine_module
+    v01_machine_path = _TEST_DIR / "v01_bb_machine.py"
+    spec = importlib.util.spec_from_file_location("v01_bb_machine", v01_machine_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["v01_bb_machine"] = module
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    _v01_machine_module = module
+    return module
+
+
+def _is_pruned_by_v01(pattern_str: str, n: int) -> bool:
+    """C++ パターン表記が Python の halt未到達枝刈り対象かどうかを確認する。"""
+    v01_machine = _get_v01_machine_module()
+    tokens = pattern_str.split()
+    pattern = [
+        [
+            None if tokens[i * 2] == "0RH" else tokens[i * 2],
+            None if tokens[i * 2 + 1] == "0RH" else tokens[i * 2 + 1],
+        ]
+        for i in range(n)
+    ]
+    tm = v01_machine.TransitionMachine(n, n * 25)
+    tm.init_instructions(pattern)
+    return bool(tm.check_unreachable_halt_or_none())
+
 
 def _ensure_v01_csv(n: int) -> Path:
     """v0.1 CSV が最新フォーマットで存在することを確認し、パスを返す。"""
@@ -122,13 +164,14 @@ def _ensure_v01_csv(n: int) -> Path:
     return path
 
 
-def _load_v01_loop_shifts(n: int) -> dict[str, int]:
-    """Python v0.1 CSV からループパターン（steps < 0）の loop_shift 辞書を返す。"""
+def _load_v01_loop_shifts(n: int) -> dict[str, tuple[int, int]]:
+    """Python v0.1 CSV からループパターン（steps < 0）の (loop_shift, detected_step) 辞書を返す。"""
     path = _ensure_v01_csv(n)
-    result: dict[str, int] = {}
+    result: dict[str, tuple[int, int]] = {}
     with open(path, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
-            if int(row["steps"]) >= 0:
+            steps = int(row["steps"])
+            if steps >= 0:
                 continue
             pattern = ast.literal_eval(row["pattern"])
             tokens = [
@@ -136,7 +179,7 @@ def _load_v01_loop_shifts(n: int) -> dict[str, int]:
                 for row_ in pattern
                 for instr in row_
             ]
-            result[" ".join(tokens)] = int(row["loop_shift"])
+            result[" ".join(tokens)] = (int(row["loop_shift"]), -steps)
     return result
 
 
@@ -168,14 +211,20 @@ class TestCheckSameLoop:
         for pattern, row in cpp_all.items():
             if row.get("unstoppable_checker_detected") != "true":
                 continue
+            checker_step = int(row["unstoppable_checker_step"])
             if pattern not in v01_loops:
+                if _is_pruned_by_v01(pattern, n):
+                    continue  # Python が halt未到達として枝刈り済み → 正当な unstoppable
                 false_positives.append(
-                    f"{pattern}: C++ unstoppable だが Python でループ未検出"
+                    f"{pattern}: C++ unstoppable (checker_step={checker_step}) だが Python でループ未検出"
                 )
-            elif v01_loops[pattern] != 0:
-                false_positives.append(
-                    f"{pattern}: C++ unstoppable だが Python loop_shift={v01_loops[pattern]} (0 以外)"
-                )
+            else:
+                loop_shift, py_steps = v01_loops[pattern]
+                if loop_shift != 0:
+                    false_positives.append(
+                        f"{pattern}: C++ unstoppable (checker_step={checker_step})"
+                        f" だが Python loop_shift={loop_shift} (step={py_steps})"
+                    )
 
         assert not false_positives, "\n".join(false_positives)
 

@@ -368,8 +368,8 @@ void search(const Config& config) {
         std::filesystem::create_directories("results");
         csv_file.open(std::format("results/bb_{}_patterns.csv", n_states));
         csv_file << "pattern,steps,result,check_loop_step,check_loop_detected,"
-                    "unstoppable_checker_detected,setup_usec,run_usec,check_loop_usec,"
-                    "unstoppable_checker_usec\n";
+                    "unstoppable_checker_detected,unstoppable_checker_step,"
+                    "setup_usec,run_usec,check_loop_usec,unstoppable_checker_usec\n";
     }
 
     Stat stat_setup;
@@ -420,7 +420,8 @@ void search(const Config& config) {
             stat_check_loop.stop();
             stat_unstoppable_checker.start();
             BbMachineUnstoppableChecker checker(m);
-            const bool unstoppable_checker_detected = checker.check();
+            const int64_t unstoppable_checker_step = checker.check();
+            const bool unstoppable_checker_detected = unstoppable_checker_step >= 0;
             stat_unstoppable_checker.stop();
             const bool check_loop_detected = loop_step >= 0;
             if (check_loop_detected)
@@ -439,6 +440,9 @@ void search(const Config& config) {
                          << (check_loop_detected ? std::to_string(loop_step) : std::string()) << ','
                          << (check_loop_detected ? "true" : "false") << ','
                          << (unstoppable_checker_detected ? "true" : "false") << ','
+                         << (unstoppable_checker_detected ? std::to_string(unstoppable_checker_step)
+                                                          : std::string())
+                         << ','
                          << std::format("{:.3f},{:.3f},{:.3f},{:.3f}",
                                         stat_setup.last_ms() * 1000.0, stat_run.last_ms() * 1000.0,
                                         stat_check_loop.last_ms() * 1000.0,
@@ -454,7 +458,7 @@ void search(const Config& config) {
             ++halt_count;
             const std::string notation = table_to_notation(m.get_instructions());
             if (output_csv) {
-                csv_file << notation << ',' << m.count() << ',' << "halt" << ",,false,false,"
+                csv_file << notation << ',' << m.count() << ',' << "halt" << ",,false,false,,"
                          << std::format("{:.3f},{:.3f},,", stat_setup.last_ms() * 1000.0,
                                         stat_run.last_ms() * 1000.0)
                          << '\n';
