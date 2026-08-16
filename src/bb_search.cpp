@@ -1,5 +1,6 @@
 ﻿#include <argparse/argparse.hpp>
 #include <array>
+#include <cassert>
 #include <chrono>
 #include <cstdio>
 #include <filesystem>

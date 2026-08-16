@@ -1,5 +1,6 @@
 #include "bb_machine.hpp"
 
+#include <cassert>
 #include <stdexcept>
 // #define BB_DEBUG_PERIODICITY
 #ifdef BB_DEBUG_PERIODICITY

@@ -23,8 +23,13 @@ endif()
 option(BB_STAT "Enable per-phase timing statistics" ON)
 option(BB_DEBUG_PERIODICITY "Enable debug output in check_periodicity" OFF)
 
-add_executable(bb src/main.cpp src/bb_machine.cpp)
-add_executable(bb_search src/bb_search.cpp src/bb_machine.cpp)
+set(BB_CORE_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/bb_machine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/bb_macro.cpp
+)
+
+add_executable(bb src/main.cpp ${BB_CORE_SOURCES})
+add_executable(bb_search src/bb_search.cpp ${BB_CORE_SOURCES})
 target_link_libraries(bb PRIVATE argparse)
 target_link_libraries(bb_search PRIVATE argparse)
 

@@ -1,13 +1,12 @@
 #pragma once
 
 #include <algorithm>
-#include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
-using State = int;
-enum class Symbol { ZERO = 0, ONE = 1 };
-enum class Dir { L = -1, R = 1 };
+#include "bb_types.hpp"
 
 class Tape {
     char* data_;
@@ -36,47 +35,6 @@ public:
             return Symbol::ZERO;
         return static_cast<Symbol>(data_[idx]);
     }
-};
-
-struct Instruction {
-    Symbol write;
-    Dir dir;
-    State next;
-
-    [[nodiscard]] bool is_halt() const { return next == -1; }
-};
-
-struct Transition {
-    State state;
-    Symbol value;
-    Instruction instr;
-};
-
-class TransitionTable {
-public:
-    TransitionTable(int num_states) {
-        for (int i = 0; i < num_states; ++i) {
-            for (int j = 0; j < 2; ++j) {
-                table_.push_back({.write = Symbol::ZERO, .dir = Dir::R, .next = -1});
-            }
-        }
-    }
-
-    void set_instruction(State state, Symbol read, const Instruction& instr) {
-        table_[key(state, read)] = instr;
-    }
-
-    [[nodiscard]] const Instruction& get_instruction(State state, Symbol read) const {
-        return table_[key(state, read)];
-    }
-
-    [[nodiscard]] const std::vector<Instruction>& get_instructions() const { return table_; }
-
-private:
-    [[nodiscard]] size_t key(State state, Symbol read) const {
-        return state * 2 + static_cast<int>(read);
-    }
-    std::vector<Instruction> table_;
 };
 
 class BbMachine {

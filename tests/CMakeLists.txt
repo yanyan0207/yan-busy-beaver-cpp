@@ -1,4 +1,4 @@
-add_executable(bb_test test_main.cpp ${CMAKE_SOURCE_DIR}/src/bb_machine.cpp)
+add_executable(bb_test test_main.cpp ${BB_CORE_SOURCES})
 add_test(NAME bb_test COMMAND bb_test)
 
 add_test(NAME bb_search_2states COMMAND bb_search 2 1000)
