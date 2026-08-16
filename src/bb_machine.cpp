@@ -50,6 +50,7 @@ class BbStateHistory {
 
 public:
     explicit BbStateHistory(const char* name = "?") : name_(name) {}
+    void reserve(size_t n) { history_.reserve(n); }
 
     void add(int64_t count, int64_t pos, State state, Symbol value) {
         history_.push_back(BBState{.count = count, .pos = pos, .state = state, .value = value});
@@ -230,6 +231,9 @@ int64_t BbMachine::check_loop() {
     BbStateHistory bb_state_history("bb");
     BbStateHistory max_head_pos_history("max");
     BbStateHistory min_head_pos_history("min");
+    bb_state_history.reserve(count_);
+    max_head_pos_history.reserve(count_);
+    min_head_pos_history.reserve(count_);
     for (size_t i = 0; i < count_; ++i) {
         const auto& instruction = table_.get_instruction(m.state_, m.tape_.read());
         assert(instruction.is_halt() == false);

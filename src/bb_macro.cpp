@@ -18,6 +18,9 @@ int64_t BbMachineUnstoppableChecker::check() {
 
     int64_t max_pos = m_.head_pos();
     int64_t min_pos = m_.head_pos();
+    history_.instructions.reserve(m_.max_steps());
+    history_.positions.reserve(m_.max_steps());
+    history_.states.reserve(m_.max_steps());
     for (size_t i = 0; i < m_.max_steps(); ++i) {
         const auto& instruction = m_.move_one_step();
         if (instruction.is_halt()) {
