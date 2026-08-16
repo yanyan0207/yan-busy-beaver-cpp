@@ -14,6 +14,7 @@ struct Instruction {
     State next;
 
     [[nodiscard]] bool is_halt() const { return next == -1; }
+    [[nodiscard]] bool operator==(const Instruction&) const = default;
 };
 
 struct Transition {

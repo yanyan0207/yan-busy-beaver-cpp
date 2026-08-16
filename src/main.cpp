@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "bb_machine.hpp"
+#include "bb_macro.hpp"
 
 class DebugBbMachine : public BbMachine {
 public:
@@ -129,6 +130,13 @@ int main(int argc, char* argv[]) {
             std::println("check_loop: loop detected at step {}", loop_step);
         else
             std::println("check_loop: no loop detected");
+
+        BbMachineUnstoppableChecker checker(*m);
+        const bool unstoppable_checker_detected = checker.check();
+        if (unstoppable_checker_detected)
+            std::println("unstoppable_checker: loop detected");
+        else
+            std::println("unstoppable_checker: no loop detected");
     }
 
     delete m;

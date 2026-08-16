@@ -12,6 +12,7 @@
 
 #include "bb_assert.hpp"
 #include "bb_machine.hpp"
+#include "bb_macro.hpp"
 #include "bb_stat.hpp"
 
 using Config = std::unordered_map<std::string, std::string>;
@@ -53,18 +54,22 @@ void save_csv(int n_states, const Config& config, double elapsed_sec) {
         return it != config.end() ? it->second : std::string("0");
     };
     const std::string new_row =
-        std::format("{},{},{},{:.3f},{},{},{},{},{},{},{},{},{},{},{},{}", version, max_steps,
-                    ASSERT_ENABLED_str, elapsed_sec, get("candidates_tried"), get("halt_count"),
-                    get("timeout_count"), get("loop_detected_count"), get("stat_setup_count"),
+        std::format("{},{},{},{:.3f},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}", version,
+                    max_steps, ASSERT_ENABLED_str, elapsed_sec, get("candidates_tried"),
+                    get("halt_count"), get("timeout_count"), get("check_loop_detected_count"),
+                    get("unstoppable_checker_detected_count"), get("stat_setup_count"),
                     get("stat_setup_total_sec"), get("stat_run_count"), get("stat_run_total_sec"),
-                    get("stat_dfs_count"), get("stat_dfs_total_sec"), get("stat_loop_count"),
-                    get("stat_loop_total_sec"));
+                    get("stat_dfs_count"), get("stat_dfs_total_sec"), get("stat_check_loop_count"),
+                    get("stat_check_loop_total_sec"), get("stat_unstoppable_checker_count"),
+                    get("stat_unstoppable_checker_total_sec"));
 
     const std::string header =
         "git_version,max_steps,ASSERT_ENABLED,elapsed_seconds,"
-        "candidates_tried,halt_count,timeout_count,loop_detected_count,"
+        "candidates_tried,halt_count,timeout_count,check_loop_detected_count,"
+        "unstoppable_checker_detected_count,"
         "setup_count,setup_total_sec,run_count,run_total_sec,dfs_count,dfs_total_sec,"
-        "loop_count,loop_total_sec";
+        "check_loop_count,check_loop_total_sec,"
+        "unstoppable_checker_count,unstoppable_checker_total_sec";
     if (lines.empty())
         lines.emplace_back(header);
     else if (lines[0] != header)
@@ -103,7 +108,8 @@ std::string table_to_notation(const std::vector<Instruction>& table) {
 }
 
 void save_log(int n_states, size_t max_steps_arg, uint64_t best_steps, size_t candidates_tried,
-              size_t timeout_count, size_t loop_count, const std::vector<std::string>& max_patterns,
+              size_t halt_count, size_t timeout_count, size_t check_loop_count,
+              size_t unstoppable_checker_count, const std::vector<std::string>& max_patterns,
               const std::string& version) {
     std::filesystem::create_directories("results");
     const std::string path = std::format("results/{}states_{}steps.log", n_states, max_steps_arg);
@@ -113,8 +119,10 @@ void save_log(int n_states, size_t max_steps_arg, uint64_t best_steps, size_t ca
     f << "ASSERT_ENABLED: " << (ASSERT_ENABLED ? "true" : "false") << '\n';
     f << "candidates_tried: " << candidates_tried << '\n';
     f << "max_steps: " << best_steps << '\n';
+    f << "halt_count: " << halt_count << '\n';
     f << "timeout_count: " << timeout_count << '\n';
-    f << "loop_count: " << loop_count << '\n';
+    f << "check_loop_detected_count: " << check_loop_count << '\n';
+    f << "unstoppable_checker_detected_count: " << unstoppable_checker_count << '\n';
     f << "max_patterns: [";
     for (size_t i = 0; i < max_patterns.size(); ++i) {
         if (i > 0)
@@ -350,20 +358,25 @@ void search(const Config& config) {
     uint64_t best_steps = 0;
     std::vector<std::string> max_patterns;
     size_t candidates_tried = 0;
+    size_t halt_count = 0;
     size_t timeout_count = 0;
-    size_t loop_count = 0;
+    size_t check_loop_count = 0;
+    size_t unstoppable_checker_count = 0;
 
     std::ofstream csv_file;
     if (output_csv) {
         std::filesystem::create_directories("results");
         csv_file.open(std::format("results/bb_{}_patterns.csv", n_states));
-        csv_file << "pattern,steps,result,setup_usec,run_usec,loop_usec\n";
+        csv_file << "pattern,steps,result,check_loop_step,check_loop_detected,"
+                    "unstoppable_checker_detected,setup_usec,run_usec,check_loop_usec,"
+                    "unstoppable_checker_usec\n";
     }
 
     Stat stat_setup;
     Stat stat_run;
     Stat stat_dfs;
-    Stat stat_loop;
+    Stat stat_check_loop;
+    Stat stat_unstoppable_checker;
 
     const auto t_start = std::chrono::steady_clock::now();
 
@@ -402,20 +415,34 @@ void search(const Config& config) {
                          : static_cast<char>('A' + last_transition.instr.next));
 #endif
         if (last_transition.instr.is_halt() == false) {
-            stat_loop.start();
+            stat_check_loop.start();
             int64_t loop_step = m.check_loop();
-            stat_loop.stop();
-            if (loop_step >= 0)
-                ++loop_count;
-            else
+            stat_check_loop.stop();
+            stat_unstoppable_checker.start();
+            BbMachineUnstoppableChecker checker(m);
+            const bool unstoppable_checker_detected = checker.check();
+            stat_unstoppable_checker.stop();
+            const bool check_loop_detected = loop_step >= 0;
+            if (check_loop_detected)
+                ++check_loop_count;
+            if (unstoppable_checker_detected)
+                ++unstoppable_checker_count;
+            if (!check_loop_detected && !unstoppable_checker_detected)
                 ++timeout_count;
             if (output_csv) {
                 const std::string notation = table_to_notation(m.get_instructions());
-                const int64_t steps = loop_step >= 0 ? loop_step : static_cast<int64_t>(m.count());
-                csv_file << notation << ',' << steps << ',' << (loop_step >= 0 ? "loop" : "timeout")
-                         << ','
-                         << std::format("{:.3f},{:.3f},{:.3f}", stat_setup.last_ms() * 1000.0,
-                                        stat_run.last_ms() * 1000.0, stat_loop.last_ms() * 1000.0)
+                const int64_t steps =
+                    check_loop_detected ? loop_step : static_cast<int64_t>(m.count());
+                const char* result =
+                    (check_loop_detected || unstoppable_checker_detected) ? "loop" : "timeout";
+                csv_file << notation << ',' << steps << ',' << result << ','
+                         << (check_loop_detected ? std::to_string(loop_step) : std::string()) << ','
+                         << (check_loop_detected ? "true" : "false") << ','
+                         << (unstoppable_checker_detected ? "true" : "false") << ','
+                         << std::format("{:.3f},{:.3f},{:.3f},{:.3f}",
+                                        stat_setup.last_ms() * 1000.0, stat_run.last_ms() * 1000.0,
+                                        stat_check_loop.last_ms() * 1000.0,
+                                        stat_unstoppable_checker.last_ms() * 1000.0)
                          << '\n';
             }
             stat_dfs.start();
@@ -424,10 +451,11 @@ void search(const Config& config) {
             if (!has_next)
                 break;
         } else {
+            ++halt_count;
             const std::string notation = table_to_notation(m.get_instructions());
             if (output_csv) {
-                csv_file << notation << ',' << m.count() << ',' << "halt" << ',' << ','
-                         << std::format("{:.3f},{:.3f},", stat_setup.last_ms() * 1000.0,
+                csv_file << notation << ',' << m.count() << ',' << "halt" << ",,false,false,"
+                         << std::format("{:.3f},{:.3f},,", stat_setup.last_ms() * 1000.0,
                                         stat_run.last_ms() * 1000.0)
                          << '\n';
             }
@@ -451,20 +479,22 @@ void search(const Config& config) {
 
     std::println("最大: {} steps", best_steps);
     std::println("candidates: {}", candidates_tried);
-    std::println("halt:    {}", candidates_tried - timeout_count - loop_count);
-    std::println("timeout: {}", timeout_count);
-    std::println("loop:    {}", loop_count);
+    std::println("halt:                         {}", halt_count);
+    std::println("timeout:                      {}", timeout_count);
+    std::println("check_loop detected:          {}", check_loop_count);
+    std::println("unstoppable_checker detected: {}", unstoppable_checker_count);
     std::println("経過時間: {:.3f} 秒", elapsed);
 #ifdef BB_STAT
     std::println("{}", stat_setup.format("stat_setup"));
     std::println("{}", stat_run.format("stat_run"));
     std::println("{}", stat_dfs.format("stat_dfs"));
-    std::println("{}", stat_loop.format("stat_loop"));
+    std::println("{}", stat_check_loop.format("stat_check_loop"));
+    std::println("{}", stat_unstoppable_checker.format("stat_unstoppable_checker"));
 #endif
 
     const std::string version = git_version();
-    save_log(n_states, max_steps, best_steps, candidates_tried, timeout_count, loop_count,
-             max_patterns, version);
+    save_log(n_states, max_steps, best_steps, candidates_tried, halt_count, timeout_count,
+             check_loop_count, unstoppable_checker_count, max_patterns, version);
 
     if (save_time) {
         Config c = config;
@@ -476,13 +506,17 @@ void search(const Config& config) {
         c["stat_run_total_sec"] = std::format("{:.6f}", stat_run.total_ms / 1000.0);
         c["stat_dfs_count"] = std::to_string(stat_dfs.count);
         c["stat_dfs_total_sec"] = std::format("{:.6f}", stat_dfs.total_ms / 1000.0);
-        c["stat_loop_count"] = std::to_string(stat_loop.count);
-        c["stat_loop_total_sec"] = std::format("{:.6f}", stat_loop.total_ms / 1000.0);
+        c["stat_check_loop_count"] = std::to_string(stat_check_loop.count);
+        c["stat_check_loop_total_sec"] = std::format("{:.6f}", stat_check_loop.total_ms / 1000.0);
+        c["stat_unstoppable_checker_count"] = std::to_string(stat_unstoppable_checker.count);
+        c["stat_unstoppable_checker_total_sec"] =
+            std::format("{:.6f}", stat_unstoppable_checker.total_ms / 1000.0);
 #endif
         c["candidates_tried"] = std::to_string(candidates_tried);
-        c["halt_count"] = std::to_string(candidates_tried - timeout_count - loop_count);
+        c["halt_count"] = std::to_string(halt_count);
         c["timeout_count"] = std::to_string(timeout_count);
-        c["loop_detected_count"] = std::to_string(loop_count);
+        c["check_loop_detected_count"] = std::to_string(check_loop_count);
+        c["unstoppable_checker_detected_count"] = std::to_string(unstoppable_checker_count);
         save_csv(n_states, c, elapsed);
     }
 }

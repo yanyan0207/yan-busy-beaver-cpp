@@ -3,26 +3,25 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "bb_types.hpp"
 
 class Tape {
-    char* data_;
+    friend class BbMachine;
+
+    std::vector<char> data_;
     size_t offset_;
     size_t size_;
     size_t head_;
 
 public:
-    Tape() : data_(nullptr), size_(0), head_(0), offset_(0) {}
+    Tape() : data_(), size_(0), head_(0), offset_(0) {}
     Tape(size_t max_pos) : offset_(max_pos), head_(0), size_(max_pos * 2 + 1) {
-        data_ = new char[size_];
-        std::fill(data_, data_ + size_, 0);
+        data_.resize(size_, static_cast<char>(Symbol::ZERO));
     }
-    ~Tape() { delete[] data_; }
-    Tape(const Tape&) = delete;
-    Tape& operator=(const Tape&) = delete;
     void write_and_move(Symbol value, Dir dir) {
         data_[head_ + offset_] = static_cast<char>(value);
         head_ += static_cast<int>(dir);
@@ -35,13 +34,19 @@ public:
             return Symbol::ZERO;
         return static_cast<Symbol>(data_[idx]);
     }
+
+    [[nodiscard]] std::unique_ptr<Tape> clone() const {
+        return std::unique_ptr<Tape>(new Tape(*this));
+    }
+
+private:
+    Tape(const Tape&) = default;
+    Tape& operator=(const Tape&) = delete;
 };
 
 class BbMachine {
 public:
     BbMachine() = default;
-    BbMachine(const BbMachine&) = delete;
-    BbMachine& operator=(const BbMachine&) = delete;
     explicit BbMachine(int num_states, size_t max_steps)
         : num_states_(num_states), max_steps_(max_steps), table_(num_states), tape_(max_steps) {}
 
@@ -49,6 +54,7 @@ public:
         table_.set_instruction(state, read, instr);
     }
 
+    [[nodiscard]] int num_states() const { return num_states_; }
     [[nodiscard]] const std::vector<Instruction>& get_instructions() const {
         return table_.get_instructions();
     }
@@ -57,6 +63,7 @@ public:
     [[nodiscard]] State current_state() const { return state_; }
     [[nodiscard]] Symbol current_symbol() const { return tape_.read(); }
     [[nodiscard]] int64_t head_pos() const { return static_cast<int64_t>(tape_.head_pos()); }
+    [[nodiscard]] Symbol read(int64_t pos) const { return tape_.read_at(pos); }
     [[nodiscard]] std::string format_tape(int from, int to) const {
         std::string s = "...";
         for (int r = from; r <= to; ++r) {
@@ -75,10 +82,12 @@ public:
     }
 
     Transition run();
+    const Instruction& move_one_step();
     int64_t check_loop();  // returns step where loop detected, -1 if not
 
-protected:
-    const Instruction& move_one_step();
+    [[nodiscard]] std::unique_ptr<BbMachine> clone() const {
+        return std::unique_ptr<BbMachine>(new BbMachine(*this));
+    }
 
 private:
     int num_states_ = 0;
@@ -87,4 +96,7 @@ private:
     Tape tape_;
     TransitionTable table_{0};
     uint64_t count_ = 0;
+
+    BbMachine(const BbMachine&) = default;
+    BbMachine& operator=(const BbMachine&) = delete;
 };
