@@ -130,19 +130,17 @@ static void quest_stack_search(int n_states, const InstructionStack& root_stack,
 
             BbSimpleMachine m;
             m.init(max_steps * 2 + 1, &table);
-            const Instruction& instr = m.run(max_steps);
+            const Transition transition = m.run(max_steps);
+            const Instruction& instr = transition.instr;
 
-            std::cout << table_str;
             if (instr.is_halt()) {
                 if (current_stack.size() < n_states * 2 - 1) {
                     pushed = true;
-                    push_instruction_stack(&current_stack, n_states, m.current_state(),
-                                           m.current_symbol());
+                    push_instruction_stack(&current_stack, n_states, transition.state,
+                                           transition.value);
                 }
-                std::cout << ",true," << m.count() << '\n';
                 output_files->success << table_str << ",true," << m.count() << '\n';
             } else {
-                std::cout << ",false," << m.count() << '\n';
                 output_files->failure << table_str << ",false," << m.count() << '\n';
             }
             candidates_tried++;

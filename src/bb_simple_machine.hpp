@@ -1,5 +1,6 @@
 #pragma once
 #include <cassert>
+#include <cstdint>
 #include <span>
 #include <vector>
 
@@ -49,13 +50,18 @@ public:
         return instr;
     }
 
-    const Instruction& run(int64_t max_steps) {
+    Transition run(int64_t max_steps) {
         assert(step_count_ < max_steps);
-        while (true) {
+        while (step_count_ < max_steps) {
+            const State prev_state = current_state_;
+            const Symbol prev_symbol = current_symbol();
             const Instruction& instr = run_one_step();
-            if (instr.is_halt() || step_count_ == max_steps)
-                return instr;
+            if (instr.is_halt())
+                return {.state = prev_state, .value = prev_symbol, .instr = instr};
         }
+        const Symbol symbol = current_symbol();
+        const Instruction& instr = transition_table_->get_instruction(current_state_, symbol);
+        return {.state = current_state_, .value = symbol, .instr = instr};
     }
 
     // 状態取得
