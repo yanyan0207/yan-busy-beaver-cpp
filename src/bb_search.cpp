@@ -92,21 +92,6 @@ void save_csv(int n_states, const Config& config, double elapsed_sec) {
     std::println("saved: {}", path);
 }
 
-std::string table_to_notation(const std::vector<Instruction>& table) {
-    std::string result;
-    for (size_t i = 0; i < table.size(); ++i) {
-        if (i > 0)
-            result += ' ';
-        const auto& t = table[i];
-        if (t.next == -1)
-            result += std::format("{}{}H", static_cast<int>(t.write), t.dir == Dir::R ? 'R' : 'L');
-        else
-            result += std::format("{}{}{}", static_cast<int>(t.write), t.dir == Dir::R ? 'R' : 'L',
-                                  static_cast<char>('A' + t.next));
-    }
-    return result;
-}
-
 void save_log(int n_states, size_t max_steps_arg, uint64_t best_steps, size_t candidates_tried,
               size_t halt_count, size_t timeout_count, size_t check_loop_count,
               size_t unstoppable_checker_count, const std::vector<std::string>& max_patterns,

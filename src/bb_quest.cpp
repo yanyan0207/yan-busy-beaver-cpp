@@ -1,0 +1,218 @@
+#include <argparse/argparse.hpp>
+#include <cassert>
+#include <cstdint>
+#include <format>
+#include <fstream>
+#include <print>
+#include <string>
+
+#include "bb_simple_machine.hpp"
+#include "bb_types.hpp"
+
+struct Config {
+    int n_states;
+    int64_t max_steps;
+    int64_t max_candidates;
+};
+static std::vector<Instruction> instruction_candidates;
+
+struct OutputFiles {
+    std::ofstream success;
+    std::ofstream failure;
+};
+
+struct InstructionStackMember {
+    int instruction_index;
+    State state;
+    Symbol symbol;
+    Instruction instr;
+};
+
+InstructionStackMember index_to_stack_member(int index, int n_states, State state, Symbol symbol) {
+    Instruction instr = instruction_candidates[index];
+    return {.instruction_index = index, .state = state, .symbol = symbol, .instr = instr};
+}
+
+using InstructionStack = std::vector<InstructionStackMember>;
+
+// static void load_csv(std::string filename) {}
+
+static void push_instruction_stack(InstructionStack* pcurrent_stack, int n_states, State next_state,
+                                   Symbol next_symbol) {
+    InstructionStack& current_stack = *pcurrent_stack;
+    assert(current_stack.size() < n_states * 2 - 1);
+    InstructionStackMember next = index_to_stack_member(0, n_states, next_state, next_symbol);
+    current_stack.push_back(next);
+}
+
+static bool next_instruction_stack(InstructionStack* pcurrent_stack, int n_states,
+                                   int finish_stack_size) {
+    InstructionStack& current_stack = *pcurrent_stack;
+    assert(current_stack.size() > 0 && current_stack.size() < n_states * 2);
+
+    while (true) {
+        int& last_instruction_index = current_stack[current_stack.size() - 1].instruction_index;
+        if (last_instruction_index < instruction_candidates.size() - 1) {
+            current_stack[current_stack.size() - 1].instr =
+                instruction_candidates[++last_instruction_index];
+            return true;
+        } else if (last_instruction_index == instruction_candidates.size() - 1) {
+            current_stack.pop_back();
+            if (current_stack.size() == finish_stack_size)
+                return false;
+        } else {
+            assert(false);
+        }
+    }
+}
+
+static TransitionTable create_table(int n_states, const InstructionStack& instruction_stack) {
+    TransitionTable table(n_states);
+    for (const InstructionStackMember& instr_member : instruction_stack) {
+        table.set_instruction(instr_member.state, instr_member.symbol, instr_member.instr);
+    }
+    return table;
+}
+
+static bool to_test(const std::vector<Instruction>& instructions) {
+    int n_states = static_cast<int>(instructions.size() / 2);
+    // check A0 is "R"
+    if (instructions[0].dir != Dir::R)
+        return false;
+
+    // check B,C,Dの状態が歯抜けでないかチェック
+    std::vector<bool> state_used;
+    state_used.resize(n_states);
+    for (const auto& instr : instructions) {
+        if (!instr.is_halt()) {
+            state_used[instr.next] = true;
+        }
+    }
+
+    // Bから最大の状態までがすべて使われているかチェック
+    for (int s = 1; s < n_states - 1; ++s) {
+        if (!state_used[s] && state_used[s + 1])
+            return false;
+    }
+
+    // Haltが到達可能かチェック
+    // HaltがAにあって、Aに遷移可能な場合はOK
+    bool halt_reachable = false;
+    if (instructions[1].is_halt() && state_used[0])
+        halt_reachable = true;
+    // Haltが到達可能な状態にあればOK
+    else {
+        for (int s = 1; s < n_states; ++s) {
+            if (state_used[s] &&
+                (instructions[s * 2].is_halt() || instructions[s * 2 + 1].is_halt())) {
+                halt_reachable = true;
+                break;
+            }
+        }
+    }
+
+    return halt_reachable;
+}
+
+static void quest_stack_search(int n_states, const InstructionStack& root_stack, State next_state,
+                               Symbol next_symbol, int64_t max_steps, int64_t max_candidates,
+                               OutputFiles* output_files) {
+    InstructionStack current_stack = root_stack;
+    push_instruction_stack(&current_stack, n_states, next_state, next_symbol);
+    int64_t candidates_tried = 0;
+    while (true) {
+        TransitionTable table = create_table(n_states, current_stack);
+        bool skipped = !to_test(table.get_instructions());
+        bool pushed = false;
+
+        if (!skipped) {
+            std::string table_str = table_to_notation(table.get_instructions());
+
+            BbSimpleMachine m;
+            m.init(max_steps * 2 + 1, &table);
+            const Instruction& instr = m.run(max_steps);
+
+            std::cout << table_str;
+            if (instr.is_halt()) {
+                if (current_stack.size() < n_states * 2 - 1) {
+                    pushed = true;
+                    push_instruction_stack(&current_stack, n_states, m.current_state(),
+                                           m.current_symbol());
+                }
+                std::cout << ",true," << m.count() << '\n';
+                output_files->success << table_str << ",true," << m.count() << '\n';
+            } else {
+                std::cout << ",false," << m.count() << '\n';
+                output_files->failure << table_str << ",false," << m.count() << '\n';
+            }
+            candidates_tried++;
+            if (max_candidates > 0 && candidates_tried >= max_candidates) {
+                std::println("max_candidates reached: {}", max_candidates);
+                return;
+            }
+        }
+        if (pushed) {
+        } else {
+            bool next = next_instruction_stack(&current_stack, n_states, root_stack.size());
+            if (!next)
+                break;
+        }
+    }
+}
+
+static void quest_main(const Config& config) {
+    OutputFiles output_files{
+        .success = std::ofstream(std::format("results/bb_quest_{}_0.csv", config.n_states)),
+        .failure = std::ofstream(std::format("results/bb_quest_{}_1.csv", config.n_states)),
+    };
+    if (!output_files.success || !output_files.failure) {
+        std::println(stderr, "failed to open output files");
+        return;
+    }
+
+    InstructionStack stack;
+    quest_stack_search(config.n_states, stack, 0, Symbol::ZERO, config.max_steps,
+                       config.max_candidates, &output_files);
+}
+
+int main(int argc, char* argv[]) {
+    argparse::ArgumentParser app("bb_quest");
+
+    app.add_argument("n_states").help("number of states").scan<'i', int>();
+    app.add_argument("max_steps")
+        .help("max steps")
+        .default_value(static_cast<int64_t>(1000))
+        .scan<'i', int64_t>();
+    app.add_argument("--max-candidates")
+        .help("max candidates to try (0 = unlimited)")
+        .default_value(static_cast<int64_t>(0))
+        .scan<'i', int64_t>();
+
+    try {
+        app.parse_args(argc, argv);
+    } catch (const std::exception& e) {
+        std::println(stderr, "{}", e.what());
+        std::println(stderr, "{}", app.help().str());
+        return 1;
+    }
+
+    Config config;
+    config.n_states = app.get<int>("n_states");
+    config.max_steps = app.get<int64_t>("max_steps");
+    config.max_candidates = app.get<int64_t>("--max-candidates");
+
+    for (int symbol = 0; symbol < 2; symbol++) {
+        for (int dir = 0; dir < 2; dir++) {
+            for (int state = 0; state < config.n_states; state++) {
+                Instruction instr = {.write = static_cast<Symbol>(symbol),
+                                     .dir = dir == 0 ? Dir::L : Dir::R,
+                                     .next = state};
+                instruction_candidates.push_back(instr);
+            }
+        }
+    }
+
+    std::println("n={}, max_steps={} max_candidates={}", config.n_states, config.max_steps,
+                 config.max_candidates);
+    quest_main(config);
+}

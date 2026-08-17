@@ -1,11 +1,13 @@
 #pragma once
 
 #include <cstddef>
+#include <print>
+#include <string>
 #include <vector>
 
 using State = int;
 
-enum class Symbol { ZERO = 0, ONE = 1 };
+enum class Symbol : char { ZERO = 0, ONE = 1 };
 enum class Dir { L = -1, R = 1 };
 
 struct Instruction {
@@ -50,3 +52,22 @@ private:
 
     std::vector<Instruction> table_;
 };
+
+static std::string instruction_to_string(const Instruction& instr) {
+    std::string s;
+    s += std::to_string(static_cast<int>(instr.write));
+    s += (instr.dir == Dir::R) ? 'R' : 'L';
+    s += (instr.next == -1) ? 'H' : static_cast<char>('A' + instr.next);
+    return s;
+}
+
+static std::string table_to_notation(const std::vector<Instruction>& table) {
+    std::string result;
+    for (size_t i = 0; i < table.size(); ++i) {
+        if (i > 0)
+            result += ' ';
+        const auto& t = table[i];
+        result += instruction_to_string(t);
+    }
+    return result;
+}
