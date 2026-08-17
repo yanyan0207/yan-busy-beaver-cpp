@@ -20,8 +20,21 @@ int64_t BbMachineUnstoppableChecker::check() {
 int64_t BbMachineUnstoppableChecker::check_same_loop() {
     // max_pos,min_posが同じになるまで飛ばす
     auto [min_pos, max_pos] = original_machine_.get_min_max_pos();
+    int64_t first_min_pos_at = original_machine_.first_read_at(min_pos);
+    int64_t first_max_pos_at_ = original_machine_.first_read_at(max_pos);
+    int64_t first_min_max_pos_at = std::max(first_min_pos_at, first_max_pos_at_);
+    if (first_min_max_pos_at == original_machine_.count()) {
+        return -1;  // ループ検出できず
+    }
 
-    for (size_t step = 1; step < original_machine_.count(); ++step) {
+    // まずはmin_pos,max_posが同じになるまで進める
+    int64_t step = 1;
+    for (; step <= first_min_max_pos_at; ++step) {
+        Instruction instr = m_.move_one_step();
+        assert(!instr.is_halt());
+    }
+
+    for (; step < original_machine_.count(); ++step) {
         Instruction instr = m_.move_one_step();
         assert(!instr.is_halt());
 

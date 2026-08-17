@@ -84,6 +84,7 @@ public:
     [[nodiscard]] int64_t head_pos() const { return tape_.head_pos(); }
     [[nodiscard]] Symbol read(int64_t pos) const { return tape_.read(pos); }
     [[nodiscard]] uint64_t last_read_at(int64_t pos) const { return tape_.last_read_at(pos); }
+    [[nodiscard]] uint64_t first_read_at(int64_t pos) const { return tape_.first_read_at(pos); }
     [[nodiscard]] std::string format_tape(int from, int to) const {
         std::string s = std::format("(pos={:5}) ...", head_pos());
         for (int r = from; r <= to; ++r) {
