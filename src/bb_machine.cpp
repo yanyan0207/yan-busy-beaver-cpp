@@ -19,6 +19,7 @@
 
 const Instruction& BbMachine::move_one_step() {
     count_++;
+    tape_.mark_read(count_);
     const auto& instruction = table_.get_instruction(state_, tape_.read());
     if (instruction.is_halt()) {
         return instruction;  // halt

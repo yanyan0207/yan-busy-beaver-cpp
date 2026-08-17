@@ -103,7 +103,7 @@ class BbMachineUnstoppableChecker {
         std::vector<int64_t> positions;
     };
 
-    bool check_same_loop();
+    int64_t check_same_loop();
 
 public:
     BbMachineUnstoppableChecker(const BbMachine& m);
@@ -130,6 +130,7 @@ public:
     CheckerStat stat_tape_compare{false};
 
 private:
+    const BbMachine& original_machine_;
     BbMachine m_;
     std::unique_ptr<BbMachine> m_same_loop_;
     MachineHistory history_;
