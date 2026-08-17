@@ -16,41 +16,51 @@ class Tape {
 
     std::vector<char> data_;
     std::vector<uint64_t> last_read_;
+    std::vector<uint64_t> first_read_;
     size_t offset_;
     size_t size_;
-    size_t head_;
+    int64_t head_;
+    int64_t max_pos_ = 0;
+    int64_t min_pos_ = 0;
 
 public:
     Tape() : data_(), last_read_(), size_(0), head_(0), offset_(0) {}
     Tape(size_t max_pos) : offset_(max_pos), head_(0), size_(max_pos * 2 + 1) {
         data_.resize(size_, static_cast<char>(Symbol::ZERO));
         last_read_.resize(size_, 0);
+        first_read_.resize(size_, 0);
     }
-    void mark_read(uint64_t step) { last_read_[head_ + offset_] = step; }
-    [[nodiscard]] uint64_t last_read_at(int64_t pos) const {
-        return last_read_[static_cast<size_t>(pos) + offset_];
+    void mark_read(uint64_t step) {
+        const size_t idx = index(head_);
+        last_read_[idx] = step;
+        if (first_read_[idx] == 0)
+            first_read_[idx] = step;
+        max_pos_ = std::max(max_pos_, head_);
+        min_pos_ = std::min(min_pos_, head_);
     }
+    [[nodiscard]] uint64_t last_read_at(int64_t pos) const { return last_read_[index(pos)]; }
+    [[nodiscard]] uint64_t first_read_at(int64_t pos) const { return first_read_[index(pos)]; }
     void write_and_move(Symbol value, Dir dir) {
-        data_[head_ + offset_] = static_cast<char>(value);
+        data_[index(head_)] = static_cast<char>(value);
         head_ += static_cast<int>(dir);
     }
     [[nodiscard]] Symbol read() const { return read(static_cast<int64_t>(head_)); }
-    [[nodiscard]] Symbol read(int64_t pos) const {
-        const size_t idx = static_cast<size_t>(pos) + offset_;
-        assert(idx < size_);
-        return static_cast<Symbol>(data_[idx]);
-    }
-    [[nodiscard]] size_t head_pos() const { return head_; }
-    [[nodiscard]] Symbol read_offset_from_head(int offset) const {
-        const size_t idx = head_ + static_cast<size_t>(offset) + offset_;
-        assert(idx < size_);
-        return static_cast<Symbol>(data_[idx]);
-    }
+    [[nodiscard]] Symbol read(int64_t pos) const { return static_cast<Symbol>(data_[index(pos)]); }
+    [[nodiscard]] int64_t head_pos() const { return head_; }
+    [[nodiscard]] Symbol read_offset_from_head(int offset) const { return read(head_ + offset); }
 
     [[nodiscard]] std::unique_ptr<Tape> clone() const { return std::make_unique<Tape>(*this); }
 
     Tape(const Tape&) = default;
     Tape& operator=(const Tape&) = delete;
+
+private:
+    [[nodiscard]] size_t index(int64_t pos) const {
+        const int64_t idx = pos + static_cast<int64_t>(offset_);
+        assert(idx >= 0);
+        assert(static_cast<size_t>(idx) < size_);
+        return static_cast<size_t>(idx);
+    }
 };
 
 class BbMachine {
@@ -71,7 +81,7 @@ public:
     [[nodiscard]] size_t max_steps() const { return max_steps_; }
     [[nodiscard]] State current_state() const { return state_; }
     [[nodiscard]] Symbol current_symbol() const { return tape_.read(); }
-    [[nodiscard]] int64_t head_pos() const { return static_cast<int64_t>(tape_.head_pos()); }
+    [[nodiscard]] int64_t head_pos() const { return tape_.head_pos(); }
     [[nodiscard]] Symbol read(int64_t pos) const { return tape_.read(pos); }
     [[nodiscard]] uint64_t last_read_at(int64_t pos) const { return tape_.last_read_at(pos); }
     [[nodiscard]] std::string format_tape(int from, int to) const {
@@ -94,20 +104,7 @@ public:
     Transition run();
     const Instruction& move_one_step();
     [[nodiscard]] std::pair<int64_t, int64_t> get_min_max_pos() const {
-        int64_t min_pos = 0, max_pos = 0;
-        for (int64_t pos = 0; pos <= count_; ++pos) {
-            if (tape_.last_read_at(-pos) == 0) {
-                min_pos = -pos + 1;
-                break;
-            }
-        }
-        for (int64_t pos = 0; pos <= count_; ++pos) {
-            if (tape_.last_read_at(pos) == 0) {
-                max_pos = pos - 1;
-                break;
-            }
-        }
-        return {min_pos, max_pos};
+        return {tape_.min_pos_, tape_.max_pos_};
     }
     int64_t check_loop();  // returns step where loop detected, -1 if not
 
