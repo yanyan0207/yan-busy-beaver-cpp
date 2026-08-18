@@ -76,13 +76,13 @@ def main(n_states: int):
             print(f"Found matching pattern: {perm}")
             print(work_df[matched])
 
-        if perm != ("B", "C", "D"):
-            # 元のファイルとも比較
-            work_df["pattern"] == unresolved_df["pattern"]
-            matched = work_df["pattern"].isin(unresolved_df["pattern"])
-            if matched.any():
-                print(f"Found matching pattern: {perm}")
-                print(work_df[matched])
+        # if perm != ("B", "C", "D"):
+        #     # 元のファイルとも比較
+        #     work_df["pattern"] == unresolved_df["pattern"]
+        #     matched = work_df["pattern"].isin(unresolved_df["pattern"])
+        #     if matched.any():
+        #         print(f"Found matching pattern: {perm}")
+        #         print(work_df[matched])
 
 
 if __name__ == "__main__":

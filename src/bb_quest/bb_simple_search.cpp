@@ -82,6 +82,48 @@ static bool to_test(const std::vector<Instruction>& instructions) {
     if (instructions[0].dir != Dir::R)
         return false;
 
+    // AがA、BがB、CがC...にしか遷移しなかったら状態から脱出できないので不要
+    for (int s = 0; s < n_states; ++s) {
+        const Instruction& instr0 = instructions[s * 2 + 0];
+        const Instruction& instr1 = instructions[s * 2 + 1];
+        if (instr0.next == s && instr1.next == s)
+            return false;
+    }
+
+    // BとCが全く同じなど
+    // BとCのwrite/dirが同じで、遷移先が->C ->Bなど等価な場合
+    for (int s1 = 1; s1 < n_states - 1; ++s1) {
+        for (int s2 = s1 + 1; s2 < n_states; ++s2) {
+            const Instruction& instr0_sym0 = instructions[s1 * 2 + 0];
+            const Instruction& instr0_sym1 = instructions[s1 * 2 + 1];
+            const Instruction& instr1_sym0 = instructions[s2 * 2 + 0];
+            const Instruction& instr1_sym1 = instructions[s2 * 2 + 1];
+            if (instr0_sym0.is_halt() || instr0_sym1.is_halt() || instr1_sym0.is_halt() ||
+                instr1_sym1.is_halt()) {
+            } else if (instr0_sym0.write != instr1_sym0.write ||
+                       instr0_sym0.dir != instr1_sym0.dir ||
+                       instr0_sym1.write != instr1_sym1.write ||
+                       instr0_sym1.dir != instr1_sym1.dir) {
+            } else {
+                bool same0 = false;
+                bool same1 = false;
+                if (instr0_sym0.next == instr1_sym0.next)
+                    same0 = true;
+                else if ((instr0_sym0.next == s1 || instr0_sym0.next == s2) &&
+                         (instr1_sym0.next == s1 || instr1_sym0.next == s2))
+                    same0 = true;
+                if (instr0_sym1.next == instr1_sym1.next)
+                    same1 = true;
+                else if ((instr0_sym1.next == s1 || instr0_sym1.next == s2) &&
+                         (instr1_sym1.next == s1 || instr1_sym1.next == s2))
+                    same1 = true;
+
+                if (same0 && same1)
+                    return false;
+            }
+        }
+    }
+
     // check B,C,Dの状態が歯抜けでないかチェック
     std::vector<bool> state_used;
     state_used.resize(n_states);
