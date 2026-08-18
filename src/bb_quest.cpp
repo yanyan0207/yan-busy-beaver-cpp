@@ -114,46 +114,100 @@ static bool to_test(const std::vector<Instruction>& instructions) {
     return halt_reachable;
 }
 
-static void quest_stack_search(int n_states, const InstructionStack& root_stack, State next_state,
-                               Symbol next_symbol, int64_t max_steps, int64_t max_candidates,
-                               OutputFiles* output_files) {
-    InstructionStack current_stack = root_stack;
-    push_instruction_stack(&current_stack, n_states, next_state, next_symbol);
-    int64_t candidates_tried = 0;
-    while (true) {
-        TransitionTable table = create_table(n_states, current_stack);
-        bool skipped = !to_test(table.get_instructions());
-        bool pushed = false;
+class StackTransitionTableGenerator {
+    InstructionStack current_stack;
+    int root_stack_size;
+    int n_states_;
 
-        if (!skipped) {
-            std::string table_str = table_to_notation(table.get_instructions());
+public:
+    StackTransitionTableGenerator(int n_states, const InstructionStack& root_stack)
+        : n_states_(n_states),
+          current_stack(root_stack),
+          root_stack_size(static_cast<int>(root_stack.size())) {}
 
-            BbSimpleMachine m;
-            m.init(max_steps * 2 + 1, &table);
-            const Transition transition = m.run(max_steps);
-            const Instruction& instr = transition.instr;
-
-            if (instr.is_halt()) {
-                if (current_stack.size() < n_states * 2 - 1) {
-                    pushed = true;
-                    push_instruction_stack(&current_stack, n_states, transition.state,
-                                           transition.value);
-                }
-                output_files->success << table_str << ",true," << m.count() << '\n';
-            } else {
-                output_files->failure << table_str << ",false," << m.count() << '\n';
-            }
-            candidates_tried++;
-            if (max_candidates > 0 && candidates_tried >= max_candidates) {
-                std::println("max_candidates reached: {}", max_candidates);
-                return;
+    const InstructionStack* next(State next_state, Symbol next_symbol) {
+        if (current_stack.size() < n_states_ * 2 - 1) {
+            push_instruction_stack(&current_stack, n_states_, next_state, next_symbol);
+            if (to_test(create_table(n_states_, current_stack).get_instructions())) {
+                return &current_stack;
             }
         }
-        if (pushed) {
-        } else {
-            bool next = next_instruction_stack(&current_stack, n_states, root_stack.size());
+        return next();
+    }
+    const InstructionStack* next() {
+        while (true) {
+            bool next = next_instruction_stack(&current_stack, n_states_, root_stack_size);
             if (!next)
-                break;
+                return nullptr;
+            TransitionTable table = create_table(n_states_, current_stack);
+            bool skipped = !to_test(table.get_instructions());
+            if (!skipped) {
+                return &current_stack;
+            }
+        }
+    }
+};
+
+static void quest_stack_search(int n_states, const InstructionStack& root_stack, int64_t max_steps,
+                               int64_t max_candidates, OutputFiles* output_files) {
+    int64_t candidates_tried = 0;
+
+    // root_stackの実行
+    State next_state = 0;
+    Symbol next_symbol = Symbol::ZERO;
+    if (root_stack.size()) {
+        TransitionTable table = create_table(n_states, root_stack);
+        if (!to_test(table.get_instructions())) {
+            std::println("root_stack is skipped");
+            return;
+        }
+        BbSimpleMachine m;
+        m.init(max_steps * 2 + 1, &table);
+        const Transition transition = m.run(max_steps);
+        const Instruction& instr = transition.instr;
+        candidates_tried++;
+        if (instr.is_halt()) {
+            output_files->success << table_to_notation(table.get_instructions()) << ",true,"
+                                  << m.count() << '\n';
+            next_state = transition.state;
+            next_symbol = transition.value;
+        } else {
+            output_files->failure << table_to_notation(table.get_instructions()) << ",false,"
+                                  << m.count() << '\n';
+            return;
+        }
+    }
+
+    StackTransitionTableGenerator table_generator(n_states, root_stack);
+    while (true) {
+        const InstructionStack* current_stack;
+        if (next_state == -1) {
+            current_stack = table_generator.next();
+        } else {
+            current_stack = table_generator.next(next_state, next_symbol);
+        }
+        if (!current_stack) {
+            break;
+        }
+
+        TransitionTable table = create_table(n_states, *current_stack);
+        std::string table_str = table_to_notation(table.get_instructions());
+        BbSimpleMachine m;
+        m.init(max_steps * 2 + 1, &table);
+        const Transition transition = m.run(max_steps);
+        const Instruction& instr = transition.instr;
+
+        if (instr.is_halt()) {
+            output_files->success << table_str << ",true," << m.count() << '\n';
+            next_state = transition.state;
+            next_symbol = transition.value;
+        } else {
+            output_files->failure << table_str << ",false," << m.count() << '\n';
+            next_state = -1;
+        }
+        if (++candidates_tried >= max_candidates && max_candidates > 0) {
+            std::println("max_candidates reached: {}", max_candidates);
+            return;
         }
     }
 }
@@ -169,8 +223,8 @@ static void quest_main(const Config& config) {
     }
 
     InstructionStack stack;
-    quest_stack_search(config.n_states, stack, 0, Symbol::ZERO, config.max_steps,
-                       config.max_candidates, &output_files);
+    quest_stack_search(config.n_states, stack, config.max_steps, config.max_candidates,
+                       &output_files);
 }
 
 int main(int argc, char* argv[]) {
