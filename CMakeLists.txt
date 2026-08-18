@@ -34,10 +34,10 @@ set(BB_CORE_SOURCES
 
 add_executable(bb src/main.cpp ${BB_CORE_SOURCES})
 add_executable(bb_search src/bb_search.cpp ${BB_CORE_SOURCES})
-add_executable(bb_quest src/bb_quest.cpp ${BB_CORE_SOURCES})
+add_executable(bb_simple_search src/bb_quest/bb_simple_search.cpp ${BB_CORE_SOURCES})
 target_link_libraries(bb PRIVATE argparse)
 target_link_libraries(bb_search PRIVATE argparse)
-target_link_libraries(bb_quest PRIVATE argparse)
+target_link_libraries(bb_simple_search PRIVATE argparse)
 
 if(BB_STAT)
     target_compile_definitions(bb_search PRIVATE BB_STAT)

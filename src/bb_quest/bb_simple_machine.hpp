@@ -4,7 +4,7 @@
 #include <span>
 #include <vector>
 
-#include "bb_types.hpp"
+#include "../bb_types.hpp"
 
 class BbSimpleMachine {
     std::vector<Symbol> tape_;

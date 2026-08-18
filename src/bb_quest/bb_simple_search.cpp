@@ -1,13 +1,14 @@
 #include <argparse/argparse.hpp>
 #include <cassert>
 #include <cstdint>
+#include <filesystem>
 #include <format>
 #include <fstream>
 #include <print>
 #include <string>
 
+#include "../bb_types.hpp"
 #include "bb_simple_machine.hpp"
-#include "bb_types.hpp"
 
 struct Config {
     int n_states;
@@ -17,6 +18,7 @@ struct Config {
 static std::vector<Instruction> instruction_candidates;
 
 struct OutputFiles {
+    std::ofstream skipped;
     std::ofstream success;
     std::ofstream failure;
 };
@@ -118,18 +120,25 @@ class StackTransitionTableGenerator {
     InstructionStack current_stack;
     int root_stack_size;
     int n_states_;
+    std::ofstream& skipped_file_;
 
 public:
-    StackTransitionTableGenerator(int n_states, const InstructionStack& root_stack)
+    StackTransitionTableGenerator(int n_states, const InstructionStack& root_stack,
+                                  std::ofstream& skipped_file)
         : n_states_(n_states),
           current_stack(root_stack),
-          root_stack_size(static_cast<int>(root_stack.size())) {}
+          root_stack_size(static_cast<int>(root_stack.size())),
+          skipped_file_(skipped_file) {}
 
     const InstructionStack* next(State next_state, Symbol next_symbol) {
         if (current_stack.size() < n_states_ * 2 - 1) {
             push_instruction_stack(&current_stack, n_states_, next_state, next_symbol);
             if (to_test(create_table(n_states_, current_stack).get_instructions())) {
                 return &current_stack;
+            } else {
+                skipped_file_ << table_to_notation(
+                                     create_table(n_states_, current_stack).get_instructions())
+                              << ",skipped\n";
             }
         }
         return next();
@@ -141,9 +150,12 @@ public:
                 return nullptr;
             TransitionTable table = create_table(n_states_, current_stack);
             bool skipped = !to_test(table.get_instructions());
-            if (!skipped) {
+            if (skipped)
+                skipped_file_ << table_to_notation(
+                                     create_table(n_states_, current_stack).get_instructions())
+                              << ",skipped\n";
+            else
                 return &current_stack;
-            }
         }
     }
 };
@@ -158,7 +170,7 @@ static void quest_stack_search(int n_states, const InstructionStack& root_stack,
     if (root_stack.size()) {
         TransitionTable table = create_table(n_states, root_stack);
         if (!to_test(table.get_instructions())) {
-            std::println("root_stack is skipped");
+            assert(false);
             return;
         }
         BbSimpleMachine m;
@@ -167,18 +179,18 @@ static void quest_stack_search(int n_states, const InstructionStack& root_stack,
         const Instruction& instr = transition.instr;
         candidates_tried++;
         if (instr.is_halt()) {
-            output_files->success << table_to_notation(table.get_instructions()) << ",true,"
+            output_files->success << table_to_notation(table.get_instructions()) << ",halt,"
                                   << m.count() << '\n';
             next_state = transition.state;
             next_symbol = transition.value;
         } else {
-            output_files->failure << table_to_notation(table.get_instructions()) << ",false,"
+            output_files->failure << table_to_notation(table.get_instructions()) << ",unresolved,"
                                   << m.count() << '\n';
             return;
         }
     }
 
-    StackTransitionTableGenerator table_generator(n_states, root_stack);
+    StackTransitionTableGenerator table_generator(n_states, root_stack, output_files->skipped);
     while (true) {
         const InstructionStack* current_stack;
         if (next_state == -1) {
@@ -198,11 +210,11 @@ static void quest_stack_search(int n_states, const InstructionStack& root_stack,
         const Instruction& instr = transition.instr;
 
         if (instr.is_halt()) {
-            output_files->success << table_str << ",true," << m.count() << '\n';
+            output_files->success << table_str << ",halt," << m.count() << '\n';
             next_state = transition.state;
             next_symbol = transition.value;
         } else {
-            output_files->failure << table_str << ",false," << m.count() << '\n';
+            output_files->failure << table_str << ",unresolved," << m.count() << '\n';
             next_state = -1;
         }
         if (++candidates_tried >= max_candidates && max_candidates > 0) {
@@ -213,11 +225,23 @@ static void quest_stack_search(int n_states, const InstructionStack& root_stack,
 }
 
 static void quest_main(const Config& config) {
+    const auto output_dir =
+        std::filesystem::path{std::format("results/bb_quest_{}/01_simple_search", config.n_states)};
+
+    std::filesystem::create_directories(output_dir);
     OutputFiles output_files{
-        .success = std::ofstream(std::format("results/bb_quest_{}_0.csv", config.n_states)),
-        .failure = std::ofstream(std::format("results/bb_quest_{}_1.csv", config.n_states)),
+        .skipped = std::ofstream(
+            std::format("results/bb_quest_{}/01_simple_search/skipped.csv", config.n_states)),
+        .success = std::ofstream(
+            std::format("results/bb_quest_{}/01_simple_search/decided.csv", config.n_states)),
+        .failure = std::ofstream(
+            std::format("results/bb_quest_{}/01_simple_search/unresolved.csv", config.n_states)),
     };
-    if (!output_files.success || !output_files.failure) {
+
+    output_files.skipped << "pattern,result" << '\n';
+    output_files.success << "pattern,result,steps" << '\n';
+    output_files.failure << "pattern,result,steps" << '\n';
+    if (!output_files.skipped || !output_files.success || !output_files.failure) {
         std::println(stderr, "failed to open output files");
         return;
     }

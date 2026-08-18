@@ -31,3 +31,6 @@ tidy:
 
 clean:
 	cmake --build $(BUILD) --target clean
+
+quest: build
+	./$(BUILD)/bb_simple_search.exe $(N)
