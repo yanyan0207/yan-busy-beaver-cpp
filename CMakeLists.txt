@@ -35,9 +35,11 @@ set(BB_CORE_SOURCES
 add_executable(bb src/main.cpp ${BB_CORE_SOURCES})
 add_executable(bb_search src/bb_search.cpp ${BB_CORE_SOURCES})
 add_executable(bb_simple_search src/bb_quest/bb_simple_search.cpp ${BB_CORE_SOURCES})
+add_executable(bb_check_loop src/bb_quest/bb_check_loop.cpp ${BB_CORE_SOURCES})
 target_link_libraries(bb PRIVATE argparse)
 target_link_libraries(bb_search PRIVATE argparse)
 target_link_libraries(bb_simple_search PRIVATE argparse)
+target_link_libraries(bb_check_loop PRIVATE argparse)
 
 if(BB_STAT)
     target_compile_definitions(bb_search PRIVATE BB_STAT)

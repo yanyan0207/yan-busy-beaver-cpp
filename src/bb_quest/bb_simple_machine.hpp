@@ -7,6 +7,7 @@
 #include "../bb_types.hpp"
 
 class BbSimpleMachine {
+protected:
     std::vector<Symbol> tape_;
     int64_t head_pos_ = 0;
 
@@ -33,7 +34,7 @@ public:
         transition_table_ = transition_table;
     }
 
-    const Instruction& run_one_step() {
+    virtual const Instruction& run_one_step() {
         assert(transition_table_ != nullptr);
         const Symbol current_symbol = read_symbol(head_pos_);
         const Instruction& instr =
@@ -74,8 +75,9 @@ public:
     [[nodiscard]] Symbol read_symbol(int64_t pos) const {
         return static_cast<Symbol>(tape_[index(pos)]);
     }
-    [[nodiscard]] std::span<const Symbol> read_tape_range(int64_t start_pos, size_t size) const {
-        return {&tape_[index(start_pos)], size};
+    [[nodiscard]] std::span<const Symbol> get_tape_range(int64_t start_pos, int64_t size) const {
+        int64_t index = this->index(start_pos);
+        return {&tape_[index], static_cast<size_t>(size)};
     }
 
 protected:
