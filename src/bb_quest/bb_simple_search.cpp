@@ -76,18 +76,47 @@ static TransitionTable create_table(int n_states, const InstructionStack& instru
     return table;
 }
 
-static bool to_test(const std::vector<Instruction>& instructions) {
+enum class SkipReason {
+    None,
+    Needless,
+    HaltUnreachable,
+};
+static bool search_halt_reachable(const std::vector<Instruction>& instructions, State state,
+                                  std::set<State>& searched_states) {
+    if (searched_states.find(state) != searched_states.end())
+        return false;
+    const auto& instr0 = instructions[state * 2];
+    const auto& instr1 = instructions[state * 2 + 1];
+    if (instr0.is_halt() || instr1.is_halt())
+        return true;
+    searched_states.insert(state);
+    if (search_halt_reachable(instructions, instr0.next, searched_states))
+        return true;
+    if (search_halt_reachable(instructions, instr1.next, searched_states))
+        return true;
+    return false;
+}
+static SkipReason should_skipped(const std::vector<Instruction>& instructions,
+                                 const InstructionStack& instruction_stack) {
     int n_states = static_cast<int>(instructions.size() / 2);
     // check A0 is "R"
     if (instructions[0].dir != Dir::R)
-        return false;
+        return SkipReason::Needless;
 
-    // AがA、BがB、CがC...にしか遷移しなかったら状態から脱出できないので不要
+    // 最後の命令から遷移できる状態を探索
+    if (!instruction_stack.empty()) {
+        const auto& last_instr_member = instruction_stack.back();
+        const Instruction& last_instr = last_instr_member.instr;
+        std::set<State> searched_states;
+        if (!search_halt_reachable(instructions, last_instr.next, searched_states))
+            return SkipReason::HaltUnreachable;
+    }
+
     for (int s = 0; s < n_states; ++s) {
         const Instruction& instr0 = instructions[s * 2 + 0];
         const Instruction& instr1 = instructions[s * 2 + 1];
         if (instr0.next == s && instr1.next == s)
-            return false;
+            return SkipReason::HaltUnreachable;
     }
 
     // BとCが全く同じなど
@@ -119,7 +148,7 @@ static bool to_test(const std::vector<Instruction>& instructions) {
                     same1 = true;
 
                 if (same0 && same1)
-                    return false;
+                    return SkipReason::Needless;
             }
         }
     }
@@ -136,7 +165,7 @@ static bool to_test(const std::vector<Instruction>& instructions) {
     // Bから最大の状態までがすべて使われているかチェック
     for (int s = 1; s < n_states - 1; ++s) {
         if (!state_used[s] && state_used[s + 1])
-            return false;
+            return SkipReason::Needless;
     }
 
     // Haltが到達可能かチェック
@@ -155,7 +184,7 @@ static bool to_test(const std::vector<Instruction>& instructions) {
         }
     }
 
-    return halt_reachable;
+    return halt_reachable ? SkipReason::None : SkipReason::HaltUnreachable;
 }
 
 class StackTransitionTableGenerator {
@@ -175,12 +204,17 @@ public:
     const InstructionStack* next(State next_state, Symbol next_symbol) {
         if (current_stack.size() < n_states_ * 2 - 1) {
             push_instruction_stack(&current_stack, n_states_, next_state, next_symbol);
-            if (to_test(create_table(n_states_, current_stack).get_instructions())) {
+            auto skipped_reason = should_skipped(
+                create_table(n_states_, current_stack).get_instructions(), current_stack);
+            if (skipped_reason == SkipReason::None) {
                 return &current_stack;
             } else {
                 skipped_file_ << table_to_notation(
                                      create_table(n_states_, current_stack).get_instructions())
-                              << ",skipped\n";
+                              << ",skipped,"
+                              << (skipped_reason == SkipReason::HaltUnreachable ? "unreachable"
+                                                                                : "needless")
+                              << '\n';
             }
         }
         return next();
@@ -191,11 +225,14 @@ public:
             if (!next)
                 return nullptr;
             TransitionTable table = create_table(n_states_, current_stack);
-            bool skipped = !to_test(table.get_instructions());
-            if (skipped)
+            auto skipped_reason = should_skipped(table.get_instructions(), current_stack);
+            if (skipped_reason != SkipReason::None)
                 skipped_file_ << table_to_notation(
                                      create_table(n_states_, current_stack).get_instructions())
-                              << ",skipped\n";
+                              << ",skipped,"
+                              << (skipped_reason == SkipReason::HaltUnreachable ? "unreachable"
+                                                                                : "needless")
+                              << '\n';
             else
                 return &current_stack;
         }
@@ -211,7 +248,8 @@ static void quest_stack_search(int n_states, const InstructionStack& root_stack,
     Symbol next_symbol = Symbol::ZERO;
     if (root_stack.size()) {
         TransitionTable table = create_table(n_states, root_stack);
-        if (!to_test(table.get_instructions())) {
+        auto skipped_reason = should_skipped(table.get_instructions(), root_stack);
+        if (skipped_reason == SkipReason::None) {
             assert(false);
             return;
         }
